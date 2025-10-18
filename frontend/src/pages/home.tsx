@@ -114,8 +114,8 @@ export default function Home() {
                             </div>
                             <div className="flex flex-col text-left">
                                 <h3 className="text-lg mb-4 mt-4">CONTACT</h3>
-                                <p className="text-sm md:text-md drop-shadow-md"><FaPhone className="inline mr-1"/> (02) 1234-5678</p>
-                                <p className="text-sm md:text-md drop-shadow-md"><FaEnvelope className="inline mr-1"/> info@petcare.com</p>
+                                <p className="text-sm md:text-md drop-shadow-md"><FaPhone className="inline mr-1"/> (+63) 968 388 2727</p>
+                                <p className="text-sm md:text-md drop-shadow-md"><FaEnvelope className="inline mr-1"/> petmedicsvetclinic21@gmail.com</p>
                             </div>
                         </div>
                         <div className="flex flex-col w-full md:w-3/4">
