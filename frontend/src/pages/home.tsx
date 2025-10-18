@@ -1,9 +1,9 @@
-import HeroIcon from "../components/HeroIcon"
-import NavBar from "../components/navbar"
-import NavItem from "../components/navitem"
+
 
 import home_image from "../assets/home/home_image.png"
 import bg_service from "../assets/home/bg_service.jpg"
+
+import Header from "../components/header"
 
 import { motion } from "framer-motion"
 import Service from "../components/service"
@@ -19,11 +19,7 @@ import { FaHouse } from "react-icons/fa6";
 export default function Home() {
     return (
         <>
-        <header className="fixed p-4 px-7 left-0 bg-[#1BA3AB] flex flex-row justify-between items-center top-0 w-screen h-16 md:h-20 z-50">
-            <HeroIcon />
-
-            <NavBar />
-        </header>
+        <Header />
 
         <main className="h-screen w-full max-w-full top-16 md:top-20 pt-4 md:pt-8 bg-gradient-to-b from-[#1BA3AB] to-[#145956]">
             <section id="home" className="w-full h-3/4 flex flex-col md:flex-row md:justify-normal justify-center items-center">
@@ -146,6 +142,12 @@ export default function Home() {
                     </div>
                 </motion.div>
             </section>
+
+            <footer className="w-full mt-8 h-16 bottom-0 relative">
+                <div className="w-full h-full bg-[#145956] flex justify-center items-center">
+                    <p className="text-white text-center text-sm md:text-md">© 2025 Pet Medics Veterinary Clinic. All rights reserved.</p>
+                </div>
+            </footer>   
             </main>
         </>
     )
