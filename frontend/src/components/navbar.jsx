@@ -4,7 +4,7 @@ import { GiHamburgerMenu } from "react-icons/gi";
 import { useState, useRef, useEffect } from 'react';
 
 export default function NavBar() {
-    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [topbarOpen, setTopbarOpen] = useState(false);
     const sidebarRef = useRef(null);
     const menuButton = useRef(null);
 
@@ -12,11 +12,12 @@ export default function NavBar() {
         const handleClickOutside = (e) => {
 
             if (menuButton.current && menuButton.current.contains(e.target)) {
+                setTopbarOpen(prev => !prev);
                 return;
             }
 
             if (sidebarRef.current && !sidebarRef.current.contains(e.target)) {
-                setSidebarOpen(false);
+                setTopbarOpen(false);
             }
         }
 
@@ -24,7 +25,7 @@ export default function NavBar() {
         return () => {
             document.removeEventListener("touchstart", handleClickOutside);
         }
-    }, [sidebarOpen])
+    }, [topbarOpen])
 
     return (
         <>
@@ -38,11 +39,11 @@ export default function NavBar() {
         </nav>
 
         <div className="md:hidden flex">
-            <button ref={menuButton} onClick={() => setSidebarOpen(prev => !prev)}>
-                <GiHamburgerMenu className="text-3xl text-white"/>
+            <button ref={menuButton} className="z-50">
+                <GiHamburgerMenu className="text-3xl z-30 text-white"/>
             </button>
         </div>
-        <div ref={sidebarRef} className={`md:hidden drop-shadow-lg rounded-sm flex flex-col bg-gray-100 px-2 gap-6 py-2 h-screen w-2/3 absolute top-[64px] right-0 shadow-lg transform transition-transform duration-300 ease-in-out ${sidebarOpen ? "translate-x-0" : "translate-x-full"}`}>
+        <div ref={sidebarRef} className={`md:hidden drop-shadow-lg rounded-sm flex flex-col px-2 gap-1 py-2 h-[200%] z-[-3] bg-brand-primary w-full absolute top-[64px] right-0 shadow-lg transform transition-transform text-white duration-300 ease-in-out origin-top ${topbarOpen ? "scale-y-100 " : "scale-y-0"}`}>
             <NavItem href="/">Home</NavItem>
             <NavItem href="/about">About</NavItem>
             <NavItem href="/services">Services</NavItem>
