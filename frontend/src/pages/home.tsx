@@ -12,6 +12,9 @@ import { TbCheckupList } from "react-icons/tb";
 import { MdOutlineVaccines } from "react-icons/md";
 import { RiScissorsFill } from "react-icons/ri";
 import { TbDental } from "react-icons/tb";
+import { FaPhone } from "react-icons/fa";
+import { FaEnvelope } from "react-icons/fa";
+import { FaHouse } from "react-icons/fa6";
 
 export default function Home() {
     return (
@@ -42,7 +45,7 @@ export default function Home() {
             </section>
 
 
-            <section id="about" className="h-full w-full text-center flex flex-col justify-center items-center bg-gradient-to-b px-6 md:px-32 from-[#145956] to-[#0E3B3E]">
+            <section id="about" className="min-h-screen w-full text-center flex flex-col justify-center items-center bg-gradient-to-b px-6 md:px-32 from-[#145956] to-[#0E3B3E]">
                 {/* About Section */}
                 <motion.div
                     className="w-full"
@@ -55,7 +58,7 @@ export default function Home() {
                 </motion.div>
             </section>
 
-            <section id="services" className="h-full w-full text-center flex flex-col justify-center items-center bg-gradient-to-b px-6 md:px-32 from-[#0E3B3E] to-[#082726]">
+            <section id="services" className="min-h-screen w-full text-center flex flex-col justify-center items-center bg-gradient-to-b px-6 md:px-32 from-[#0E3B3E] to-[#082726]">
                 {/* Services Section */}
                 <img src={bg_service} alt="Background Service" className="absolute w-full h-full object-fill opacity-20 pointer-events-none"></img>
 
@@ -94,6 +97,53 @@ export default function Home() {
                         description="Maintain your pet's oral health with our dental care services."
                         additional="col-span-full"
                     />
+                </motion.div>
+            </section>
+
+            <section id="contact" className="min-h-screen mt-11 w-full text-center flex flex-col justify-center items-center bg-gradient-to-b px-6 md:px-32 from-[#fbfbfb] to-black]">
+                {/* Contact Section */}
+                <motion.div
+                    className="w-full text-[#444444]"
+                    initial={{ opacity: 0, y: 50 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                >
+                    <h2 className="text-lg md:text-xl font-semibold text-center mb-1">Contact Us</h2>
+                    <p className="text-sm md:text-md drop-shadow-md mb-8">Have questions or need assistance? Reach out to our friendly team for support and information about our services.</p>
+                    
+                    <div className="flex flex-col md:flex-row gap-4 justify-center items-center">
+                        <div className="flex flex-col md:max-w-sm">
+                            <div className="flex flex-col text-left">
+                                <h3 className="text-lg mb-4">ADDRESS</h3>
+                                <p className="text-sm md:text-md drop-shadow-md"><FaHouse className="inline mr-1" /> Blk98 L8b, C.Arellano St. Ph2. Katarungan Village, Poblacion, Muntinlupa City</p>
+                            </div>
+                            <div className="flex flex-col text-left">
+                                <h3 className="text-lg mb-4 mt-4">CONTACT</h3>
+                                <p className="text-sm md:text-md drop-shadow-md"><FaPhone className="inline mr-1"/> (02) 1234-5678</p>
+                                <p className="text-sm md:text-md drop-shadow-md"><FaEnvelope className="inline mr-1"/> info@petcare.com</p>
+                            </div>
+                        </div>
+                        <div className="flex flex-col w-full md:w-3/4">
+                            <form>
+                                <div className="flex flex-col text-left mb-4">
+                                    <label htmlFor="name" className="mb-2">Name *</label>
+                                    <input type="text" id="name" name="name" placeholder="Enter your name" className="w-full p-3 font-light text-sm border border-gray-300 bg-black/5 rounded-md" required/>
+                                </div>
+                                <div className="flex flex-col text-left mb-4">
+                                    <label htmlFor="email" className="mb-2">Email *</label>
+                                    <input type="email" id="email" name="email" placeholder="Enter your email" className="w-full p-3 font-light text-sm border border-gray-300 bg-black/5 rounded-md" required/>
+                                </div>
+                                <div className="flex flex-col text-left mb-4">
+                                    <label htmlFor="message" className="mb-2">Message *</label>
+                                    <textarea id="message" name="message" rows={4} placeholder="Enter your message" className="w-full p-3 font-light text-sm border border-gray-300 bg-black/5 rounded-md" required></textarea>
+                                </div>
+
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                className="mt-4 md:mt-0 bg-brand-primary-500 hover:bg-brand-primary-600 text-white font-semibold py-3 px-6 text-lg rounded-md shadow-lg transition-all duration-200 ease-out">Send Message</motion.button>
+                            </form>                        
+                        </div>
+                    </div>
                 </motion.div>
             </section>
             </main>
