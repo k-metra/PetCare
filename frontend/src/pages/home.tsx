@@ -15,6 +15,7 @@ import { TbDental } from "react-icons/tb";
 import { FaPhone } from "react-icons/fa";
 import { FaEnvelope } from "react-icons/fa";
 import { FaHouse } from "react-icons/fa6";
+import { FaArrowCircleRight } from "react-icons/fa";
 
 export default function Home() {
     return (
@@ -31,12 +32,11 @@ export default function Home() {
                     transition={{ duration: 0.8, ease: "easeOut" }}
                 >
                     <h1 className="text-4xl md:text-5xl font-bold text-white drop-shadow-lg mb-4">Comprehensive Pet Care at Your Fingertips</h1>
-                    <p className="text-lg md:text-xl text-white drop-shadow-md mb-6">Your one-stop solution for all your pet's health needs. Schedule appointments, access medical records, and get expert advice from licensed veterinarians—all in one convenient app.</p>
-
+                    <p className="text-lg md:text-xl text-white drop-shadow-md mb-6">Your one-stop solution for all your pet's health needs. Schedule appointments, access medical records, and get expert advice from licensed veterinarians.</p>
                     <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                    className="mt-4 md:mt-0 bg-brand-primary-500 hover:bg-brand-primary-600 text-white font-semibold py-3 px-6 text-lg rounded-md shadow-lg transition-all duration-200 ease-out">Get Started</motion.button>
+                    className="mt-4 md:mt-0 bg-brand-primary-500 hover:bg-brand-primary-600 text-white py-3 px-6 text-lg rounded-md shadow-lg transition-all duration-200 ease-out md:self-start">Set An Appointment <FaArrowCircleRight className="inline ml-2"/> </motion.button>
                 </motion.div>
             </section>
 
