@@ -60,7 +60,7 @@ export default function Home() {
 
             <section id="services" className="min-h-screen w-full text-center flex flex-col justify-center items-center bg-gradient-to-b px-6 md:px-32 from-[#0E3B3E] to-[#082726]">
                 {/* Services Section */}
-                <img src={bg_service} alt="Background Service" className="absolute w-full h-full object-fill opacity-20 pointer-events-none"></img>
+                <img src={bg_service} alt="Background Service" className="absolute w-full h-full object-cover opacity-20 pointer-events-none"></img>
 
                 <motion.div
                     className="w-full text-white"
