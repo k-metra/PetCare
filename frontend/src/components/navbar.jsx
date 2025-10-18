@@ -31,10 +31,10 @@ export default function NavBar() {
         <>
         <nav>
             <ul className="hidden md:flex flex-row text-center gap-2 text-white">
-                <NavItem href="/">Home</NavItem>
-                <NavItem href="#about">About</NavItem>
-                <NavItem href="#services">Services</NavItem>
-                <NavItem href="#contact">Contact</NavItem>
+                <NavItem href="/home">Home</NavItem>
+                <NavItem href="/home#about">About</NavItem>
+                <NavItem href="/home#services">Services</NavItem>
+                <NavItem href="/home#contact">Contact</NavItem>
             </ul>
         </nav>
 
@@ -44,10 +44,10 @@ export default function NavBar() {
             </button>
         </div>
         <div ref={sidebarRef} className={`md:hidden drop-shadow-lg rounded-sm flex flex-col px-2 gap-1 py-2 h-[200%] z-[-3] bg-brand-primary w-full absolute top-[64px] right-0 shadow-lg transform transition-transform text-white duration-300 ease-in-out origin-top ${topbarOpen ? "scale-y-100 " : "scale-y-0"}`}>
-            <NavItem href="/">Home</NavItem>
-            <NavItem href="#about">About</NavItem>
-            <NavItem href="#services">Services</NavItem>
-            <NavItem href="#contact">Contact</NavItem>
+            <NavItem href="/home">Home</NavItem>
+            <NavItem href="/home#about">About</NavItem>
+            <NavItem href="/home#services">Services</NavItem>
+            <NavItem href="/home#contact">Contact</NavItem>
         </div>
         </>
     )
