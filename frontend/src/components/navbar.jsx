@@ -35,6 +35,7 @@ export default function NavBar() {
                 <NavItem href="/home#about">About</NavItem>
                 <NavItem href="/home#services">Services</NavItem>
                 <NavItem href="/home#contact">Contact</NavItem>
+                <NavItem href="/login">Login</NavItem>
             </ul>
         </nav>
 
@@ -43,11 +44,12 @@ export default function NavBar() {
                 <GiHamburgerMenu className="text-3xl z-30 text-white"/>
             </button>
         </div>
-        <div ref={sidebarRef} className={`md:hidden drop-shadow-lg rounded-sm flex flex-col px-2 gap-1 py-2 h-[200%] z-[-3] bg-brand-primary w-full absolute top-[64px] right-0 shadow-lg transform transition-transform text-white duration-300 ease-in-out origin-top ${topbarOpen ? "scale-y-100 " : "scale-y-0"}`}>
+        <div ref={sidebarRef} className={`md:hidden drop-shadow-lg rounded-sm flex flex-col px-2 gap-1 py-2 min-h-[200%] z-[-3] bg-brand-primary w-full absolute top-[64px] right-0 shadow-lg transform transition-transform text-white duration-300 ease-in-out origin-top ${topbarOpen ? "scale-y-100 " : "scale-y-0"}`}>
             <NavItem href="/home">Home</NavItem>
             <NavItem href="/home#about">About</NavItem>
             <NavItem href="/home#services">Services</NavItem>
             <NavItem href="/home#contact">Contact</NavItem>
+            <NavItem href="/login">Login</NavItem>
         </div>
         </>
     )
