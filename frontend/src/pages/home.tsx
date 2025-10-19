@@ -46,7 +46,7 @@ export default function Home() {
                 <motion.div
                     className="w-full"
                     initial={{ opacity: 0, y: 50 }}
-                    whileInView={{ opacity: 1, y: 0 }}
+                    whileInView={{ opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }}
                     viewport={{ once: true }}>
                     <h2 className="text-2xl md:text-3xl font-bold text-white drop-shadow-lg text-center mb-8">About Us</h2>
                     <p className="text-md md:text-lg text-white drop-shadow-md mb-6">Pet Medics Veterinary Clinic is a trusted veterinary healthcare provider based in Muntinlupa City, dedicated to delivering high-quality, compassionate, and professional care for companion animals. With a commitment to animal wellness, our clinic offers a safe and supportive environment where pets receive thorough medical attention, and pet owners are guided with empathy and expertise.</p>
@@ -61,7 +61,7 @@ export default function Home() {
                 <motion.div
                     className="w-full text-white"
                     initial={{ opacity: 0, y: 50 }}
-                    whileInView={{ opacity: 1, y: 0 }}
+                    whileInView={{ opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }}
                     viewport={{ once: true }}
                 >
                     <h2 className="text-2xl md:text-3xl font-bold drop-shadow-lg text-center mb-8">Our Services</h2>
