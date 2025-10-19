@@ -3,6 +3,8 @@ import InputField from '../components/inputField'
 
 import home_image from '../assets/home/home_image.png'
 
+import { motion } from 'framer-motion'
+
 import { useState } from 'react'
 
 export default function Login() {
@@ -25,10 +27,12 @@ export default function Login() {
 
             <div className="bg-gradient-to-tr from-[#019789] to-[#13AAAB] p-8 px-10 rounded-lg drop-shadow-lg relative">
                 <h1 className="text-3xl text-center font-bold text-white">Welcome back!</h1>
-                <form className="flex flex-col gap-6 mt-10">
-                    <InputField name="username" placeholder="Username" type="text" onChange={handleChange} />
+                <form onSubmit={handleSubmit} className="flex flex-col gap-6 mt-10">
+                    <InputField name="email" placeholder="Email" type="text" onChange={handleChange} />
                     <InputField name="password" placeholder="Password" type="password" onChange={handleChange} />
+                    <motion.button whileHover={{scale:1.05, transition: {type:"tween", duration:0.3, ease:'backOut'}}} whileTap={{scale:0.95, transition: {duration:0.2, type:"spring"}}} type="submit" className="bg-brand-primary-500 border border-black/20 drop-shadow-lg text-white py-2 rounded-lg  transition-colors duration-200">Login</motion.button>
                 </form>
+                <p className="text-white/50 text-center text-sm mt-6">Don't have an account? <a href="/register" className="text-white font-semibold">Register</a></p>
             </div>
         </main>
         </>
