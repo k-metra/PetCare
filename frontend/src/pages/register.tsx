@@ -3,12 +3,16 @@ import InputField from '../components/inputField'
 
 import home_image from '../assets/home/home_image.png'
 
+import { useNavigate } from 'react-router-dom';
+
 import { motion } from 'framer-motion'
 
 import { useState } from 'react'
 
 export default function Register() {
     const [credentials, setCredentials] = useState({name: '', email: '', password: ''})
+    const [loading, setLoading] = useState(false);
+    const navigate = useNavigate();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setCredentials(prev => ({...prev, [e.target.name]: e.target.value}))
@@ -16,6 +20,7 @@ export default function Register() {
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        setLoading(true);
         // Handle login logic here
 
         await fetch('http://127.0.0.1:8000/api/register', {
@@ -26,7 +31,14 @@ export default function Register() {
             body: JSON.stringify(credentials),
         }).then(response => response.json())
         .then(data => {
-            console.log('Success:', data);
+            console.log(data);
+
+            if (data.status) {
+                console.log('Registration successful');
+                navigate('/email/verified?status=link_sent');
+            }
+        }).finally(() => {
+            setLoading(false);
         })
     }
 
@@ -42,7 +54,7 @@ export default function Register() {
                     <InputField name="name" placeholder="Full Name" type="text" onChange={handleChange} />
                     <InputField name="email" placeholder="Email" type="text" onChange={handleChange} />
                     <InputField name="password" placeholder="Password" type="password" onChange={handleChange} />
-                    <motion.button whileHover={{scale:1.05, transition: {type:"tween", duration:0.3, ease:'backOut'}}} whileTap={{scale:0.95, transition: {duration:0.2, type:"spring"}}} type="submit" className="bg-brand-primary-500 border border-black/20 drop-shadow-lg text-white py-2 rounded-lg  transition-colors duration-200">Register</motion.button>
+                    <motion.button whileHover={{scale:1.05, transition: {type:"tween", duration:0.3, ease:'backOut'}}} whileTap={{scale:0.95, transition: {duration:0.2, type:"spring"}}} type="submit" disabled={loading} className={`bg-brand-primary-500 border border-black/20 drop-shadow-lg text-white py-2 rounded-lg  transition-colors duration-200 disabled:cursor-not-allowed disabled:text-white/50`}>{loading ? 'Registering...' : 'Register'}</motion.button>
                 </form>
                 <p className="text-white/50 text-center text-sm mt-6">Already have an account? <a href="/login" className="text-white font-semibold">Login</a></p>
             </div>
