@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import Header from '../components/header';
@@ -27,6 +27,7 @@ const SetAppointment: React.FC = () => {
   });
 
   const [petCount, setPetCount] = useState<number>(1);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Available time slots from 8 AM to 3 PM
   const timeSlots = [
@@ -100,7 +101,7 @@ const SetAppointment: React.FC = () => {
     setAppointmentData(prev => ({ ...prev, services: updatedServices }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
@@ -121,10 +122,74 @@ const SetAppointment: React.FC = () => {
       return;
     }
 
-    // Here you would typically send the data to your backend
-    console.log('Appointment Data:', appointmentData);
-    alert('Appointment scheduled successfully!');
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('Please login to book an appointment.');
+        window.location.href = '/login?redirect=set-appointment';
+        return;
+      }
+
+      // Format the data for the API
+      const appointmentPayload = {
+        appointment_date: appointmentData.selectedDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
+        appointment_time: appointmentData.selectedTime,
+        pets: appointmentData.pets.map(pet => ({
+          type: pet.type,
+          breed: pet.breed
+        })),
+        services: appointmentData.services,
+        notes: '' // You can add notes field to the form if needed
+      };
+
+      const response = await fetch('http://127.0.0.1:8000/api/appointments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(appointmentPayload)
+      });
+
+      const data = await response.json();
+
+      if (data.status) {
+        alert('Appointment scheduled successfully!');
+        // Reset form
+        setAppointmentData({
+          selectedDate: undefined,
+          selectedTime: '',
+          pets: [],
+          services: []
+        });
+        setPetCount(1);
+        // Optionally redirect to appointments list page
+        // window.location.href = '/appointments';
+      } else {
+        alert(data.message || 'Failed to schedule appointment. Please try again.');
+        if (data.errors) {
+          console.error('Validation errors:', data.errors);
+        }
+      }
+    } catch (error) {
+      console.error('Error booking appointment:', error);
+      alert('An error occurred while scheduling your appointment. Please try again.');
+    }
   };
+
+  useEffect(() => {
+    if (!localStorage.getItem('token')) {
+      window.location.href = '/login?redirect=set-appointment';
+    }
+  }, [])
+
+  // Initialize pets array when component mounts
+  useEffect(() => {
+    if (appointmentData.pets.length === 0) {
+      handlePetCountChange(petCount);
+    }
+  }, [])
 
   return (
     <>
@@ -282,9 +347,14 @@ const SetAppointment: React.FC = () => {
             <div className="pt-6 border-t border-gray-200">
               <button
                 type="submit"
-                className="w-full bg-teal-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-teal-700 transition-colors focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+                disabled={isLoading}
+                className={`w-full py-3 px-6 rounded-lg font-medium transition-colors focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 ${
+                  isLoading 
+                    ? 'bg-gray-400 text-white cursor-not-allowed' 
+                    : 'bg-teal-600 text-white hover:bg-teal-700'
+                }`}
               >
-                Schedule Appointment
+                {isLoading ? 'Scheduling Appointment...' : 'Schedule Appointment'}
               </button>
             </div>
           </form>
