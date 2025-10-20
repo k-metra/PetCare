@@ -57,8 +57,8 @@ export default function Login() {
                 case 'home':
                     navigate('/home');
                     break;
-                case 'set_appointment':
-                    navigate('/set_appointment');
+                case 'set-appointment':
+                    navigate('/set-appointment');
                     break;
                 default:
                     navigate('/home');
