@@ -34,6 +34,7 @@ export default function NavBar() {
                 <NavItem href="/home">Home</NavItem>
                 <NavItem href="/home#about">About</NavItem>
                 <NavItem href="/home#services">Services</NavItem>
+                <NavItem href="/set-appointment">Book Appointment</NavItem>
                 <NavItem href="/home#contact">Contact</NavItem>
                 {!localStorage.getItem('token') && <NavItem href="/login">Login</NavItem>}
             </ul>
@@ -48,6 +49,7 @@ export default function NavBar() {
             <NavItem href="/home">Home</NavItem>
             <NavItem href="/home#about">About</NavItem>
             <NavItem href="/home#services">Services</NavItem>
+            <NavItem href="/set-appointment">Book Appointment</NavItem>
             <NavItem href="/home#contact">Contact</NavItem>
             {!localStorage.getItem('token') && <NavItem href="/login">Login</NavItem>}
         </div>
