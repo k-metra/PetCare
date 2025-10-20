@@ -1,7 +1,6 @@
 import HeroIcon from "./HeroIcon"
 import NavBar from "./navbar"
-
-import { FaUserAlt } from "react-icons/fa";
+import UserMenu from "./userMenu"
 
 import { useState, useEffect } from 'react';
 
@@ -12,6 +11,7 @@ interface User {
     email_verified_at: string | null;
     created_at: string;
     updated_at: string;
+    role?: string;
 }
 
 export default function Header() {
@@ -32,7 +32,7 @@ export default function Header() {
                 <NavBar />
                
                {user && (
-                <button className="text-white hidden md:block"><FaUserAlt className="inline mr-3"/>{user.email}</button>
+                <UserMenu user={user} />
                )}
             </div>
         </header>
