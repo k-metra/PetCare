@@ -92,4 +92,64 @@ class UserController extends Controller
         $request->user()->sendEmailVerificationNotification();
         return response()->json(['status' => true, 'message' => 'Verification link sent! Please check your email.'], 200);
     }
+
+    /**
+     * Logout user and revoke tokens
+     */
+    public function logout(Request $request) {
+        try {
+            // Revoke current token
+            $request->user()->currentAccessToken()->delete();
+            
+            return response()->json([
+                'status' => true, 
+                'message' => 'Logout successful'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false, 
+                'message' => 'Logout failed', 
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Logout from all devices by revoking all tokens
+     */
+    public function logoutAll(Request $request) {
+        try {
+            // Revoke all tokens for the user
+            $request->user()->tokens()->delete();
+            
+            return response()->json([
+                'status' => true, 
+                'message' => 'Logout from all devices successful'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false, 
+                'message' => 'Logout from all devices failed', 
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get current authenticated user info
+     */
+    public function user(Request $request) {
+        try {
+            return response()->json([
+                'status' => true,
+                'user' => $request->user()
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to get user info',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
