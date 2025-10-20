@@ -16,8 +16,16 @@ import { FaPhone } from "react-icons/fa";
 import { FaEnvelope } from "react-icons/fa";
 import { FaHouse } from "react-icons/fa6";
 import { FaArrowCircleRight } from "react-icons/fa";
+import { useNavigate } from "react-router-dom"
 
 export default function Home() {
+
+    const navigate = useNavigate();
+
+    const handleAppointmentClick =() => {
+        navigate('/set-appointment');
+    }
+
     return (
         <>
         <Header />
@@ -36,7 +44,8 @@ export default function Home() {
                     <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                    className="mt-4 md:mt-0 bg-brand-primary-500 hover:bg-brand-primary-600 text-white py-3 px-6 text-lg rounded-md shadow-lg transition-all duration-200 ease-out md:self-start">Set An Appointment <FaArrowCircleRight className="inline ml-2"/> </motion.button>
+                    className="mt-4 md:mt-0 bg-brand-primary-500 hover:bg-brand-primary-600 text-white py-3 px-6 text-lg rounded-md shadow-lg transition-all duration-200 ease-out md:self-start"
+                    onClick={handleAppointmentClick}>Set An Appointment <FaArrowCircleRight className="inline ml-2"/> </motion.button>
                 </motion.div>
             </section>
 
