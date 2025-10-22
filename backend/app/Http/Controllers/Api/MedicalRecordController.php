@@ -17,42 +17,55 @@ class MedicalRecordController extends Controller
         try {
             $request->validate([
                 'appointment_id' => 'required|integer|exists:appointments,id',
-                'doctor_name' => 'required|string|max:255',
-                'pet_records' => 'required|array',
+                'doctor_name' => 'nullable|string|max:255',
+                'pet_records' => 'array',
                 'pet_records.*.petId' => 'required|integer',
                 'pet_records.*.petName' => 'required|string',
-                'pet_records.*.weight' => 'required|string',
-                'pet_records.*.symptoms' => 'required|string',
-                'pet_records.*.diagnosis' => 'required|string',
-                'pet_records.*.testType' => 'required|string',
+                'pet_records.*.weight' => 'nullable|string',
+                'pet_records.*.symptoms' => 'nullable|string',
+                'pet_records.*.diagnosis' => 'nullable|string',
+                'pet_records.*.testType' => 'nullable|string',
                 'pet_records.*.selectedTests' => 'array',
                 'pet_records.*.medication' => 'nullable|string',
                 'pet_records.*.treatment' => 'nullable|string',
                 'pet_records.*.notes' => 'nullable|string',
-                'total_cost' => 'required|numeric',
+                'total_cost' => 'nullable|numeric',
             ]);
 
             DB::beginTransaction();
 
-            // Create medical records for each pet
-            foreach ($request->pet_records as $petRecord) {
-                DB::table('medical_records')->insert([
-                    'appointment_id' => $request->appointment_id,
-                    'pet_id' => $petRecord['petId'],
-                    'pet_name' => $petRecord['petName'],
-                    'doctor_name' => $request->doctor_name,
-                    'weight' => $petRecord['weight'],
-                    'symptoms' => $petRecord['symptoms'],
-                    'medication' => $petRecord['medication'] ?? null,
-                    'treatment' => $petRecord['treatment'] ?? null,
-                    'diagnosis' => $petRecord['diagnosis'],
-                    'test_type' => $petRecord['testType'],
-                    'selected_tests' => json_encode($petRecord['selectedTests']),
-                    'test_cost' => collect($petRecord['selectedTests'])->sum('price'),
-                    'notes' => $petRecord['notes'] ?? null,
-                    'created_at' => Carbon::now(),
-                    'updated_at' => Carbon::now(),
-                ]);
+            // Only create medical records if there's actual medical data
+            if ($request->has('pet_records') && !empty($request->pet_records)) {
+                foreach ($request->pet_records as $petRecord) {
+                    // Check if this pet has any medical data
+                    $hasMedicalData = !empty($petRecord['weight']) || 
+                                     !empty($petRecord['symptoms']) || 
+                                     !empty($petRecord['diagnosis']) || 
+                                     !empty($petRecord['testType']) || 
+                                     !empty($petRecord['medication']) || 
+                                     !empty($petRecord['treatment']) ||
+                                     !empty($petRecord['selectedTests']);
+
+                    if ($hasMedicalData) {
+                        DB::table('medical_records')->insert([
+                            'appointment_id' => $request->appointment_id,
+                            'pet_id' => $petRecord['petId'],
+                            'pet_name' => $petRecord['petName'],
+                            'doctor_name' => $request->doctor_name && trim($request->doctor_name) !== '' ? $request->doctor_name : null,
+                            'weight' => $petRecord['weight'] ?? null,
+                            'symptoms' => $petRecord['symptoms'] ?? null,
+                            'medication' => $petRecord['medication'] ?? null,
+                            'treatment' => $petRecord['treatment'] ?? null,
+                            'diagnosis' => $petRecord['diagnosis'] ?? null,
+                            'test_type' => $petRecord['testType'] ?? null,
+                            'selected_tests' => json_encode($petRecord['selectedTests'] ?? []),
+                            'test_cost' => collect($petRecord['selectedTests'] ?? [])->sum('price'),
+                            'notes' => $petRecord['notes'] ?? null,
+                            'created_at' => Carbon::now(),
+                            'updated_at' => Carbon::now(),
+                        ]);
+                    }
+                }
             }
 
             DB::commit();
