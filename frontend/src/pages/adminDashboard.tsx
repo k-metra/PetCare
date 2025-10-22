@@ -162,11 +162,13 @@ const AdminDashboard: React.FC = () => {
   const [showMedicalModal, setShowMedicalModal] = useState(false);
   const [appointmentToComplete, setAppointmentToComplete] = useState<Appointment | null>(null);
   const [medicalExam, setMedicalExam] = useState<MedicalExamination | null>(null);
-  const [activeTab, setActiveTab] = useState<'appointments' | 'petRecords'>('appointments');
+  const [activeTab, setActiveTab] = useState<'appointments' | 'petRecords' | 'analytics'>('appointments');
   const [petRecords, setPetRecords] = useState<any[]>([]);
   const [recordsSearchTerm, setRecordsSearchTerm] = useState('');
   const [selectedPetRecord, setSelectedPetRecord] = useState<any | null>(null);
   const [showPetRecordModal, setShowPetRecordModal] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [recentRecords, setRecentRecords] = useState<Appointment[]>([]);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -190,6 +192,8 @@ const AdminDashboard: React.FC = () => {
     fetchDashboardData();
     fetchAppointments();
     fetchPetRecords();
+    fetchAnalyticsData();
+    fetchRecentRecords();
   }, []);
 
   const fetchDashboardData = async () => {
@@ -452,46 +456,46 @@ const AdminDashboard: React.FC = () => {
   const completeMedicalExamination = async () => {
     if (!medicalExam || !appointmentToComplete) return;
 
-    // Validate required fields
-    if (!medicalExam.doctorName) {
-      alert('Please enter doctor\'s name');
-      return;
-    }
+    // Check if any medical examination was performed
+    const hasMedicalData = medicalExam.petRecords.some(record => 
+      record.testType || record.weight || record.symptoms || record.diagnosis || 
+      record.medication || record.treatment || record.selectedTests.length > 0
+    );
 
-    for (let i = 0; i < medicalExam.petRecords.length; i++) {
-      const record = medicalExam.petRecords[i];
-      if (!record.testType) {
-        alert(`Please select test type for ${record.petName}`);
+    // If medical data exists, validate required fields
+    if (hasMedicalData) {
+      if (!medicalExam.doctorName.trim()) {
+        alert('Please enter doctor\'s name for medical examination');
         return;
       }
-      if (!record.weight || !record.symptoms || !record.diagnosis) {
-        alert(`Please fill in all required fields for ${record.petName}`);
-        return;
+
+      for (let i = 0; i < medicalExam.petRecords.length; i++) {
+        const record = medicalExam.petRecords[i];
+        
+        // If any medical field is filled, validate required fields for that pet
+        const petHasMedicalData = record.testType || record.weight || record.symptoms || 
+                                  record.diagnosis || record.medication || record.treatment || 
+                                  record.selectedTests.length > 0;
+        
+        if (petHasMedicalData) {
+          if (!record.weight || !record.symptoms || !record.diagnosis) {
+            alert(`Please complete all required medical fields for ${record.petName} (weight, symptoms, diagnosis)`);
+            return;
+          }
+          if (!record.testType) {
+            alert(`Please select test type for ${record.petName}`);
+            return;
+          }
+        }
       }
     }
 
     try {
       setUpdatingStatus(appointmentToComplete.id);
 
-      // Save medical records
+      // If there's no medical data, skip saving medical records and just mark completed
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/medical-records', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          appointment_id: appointmentToComplete.id,
-          doctor_name: medicalExam.doctorName,
-          pet_records: medicalExam.petRecords,
-          total_cost: medicalExam.totalCost,
-        })
-      });
-
-      if (response.ok) {
-        // Update appointment status to completed
+      if (!hasMedicalData) {
         const statusResponse = await fetch(`http://127.0.0.1:8000/api/admin/appointments/${appointmentToComplete.id}/status`, {
           method: 'PUT',
           headers: {
@@ -511,18 +515,66 @@ const AdminDashboard: React.FC = () => {
                 : apt
             )
           );
-          
+
           // Close modal and refresh data
           setShowMedicalModal(false);
           setMedicalExam(null);
           setAppointmentToComplete(null);
           fetchDashboardData();
-          fetchPetRecords();
         } else {
           alert('Failed to update appointment status');
         }
       } else {
-        alert('Failed to save medical records');
+        // Save medical records when medical data exists
+        const response = await fetch('http://127.0.0.1:8000/api/medical-records', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            appointment_id: appointmentToComplete.id,
+            doctor_name: medicalExam.doctorName,
+            pet_records: medicalExam.petRecords,
+            total_cost: medicalExam.totalCost,
+          })
+        });
+
+        if (response.ok) {
+          // Update appointment status to completed
+          const statusResponse = await fetch(`http://127.0.0.1:8000/api/admin/appointments/${appointmentToComplete.id}/status`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify({ status: 'completed' })
+          });
+
+          if (statusResponse.ok) {
+            // Update local state
+            setAppointments(prev => 
+              prev.map(apt => 
+                apt.id === appointmentToComplete.id 
+                  ? { ...apt, status: 'completed' as any }
+                  : apt
+              )
+            );
+            
+            // Close modal and refresh data
+            setShowMedicalModal(false);
+            setMedicalExam(null);
+            setAppointmentToComplete(null);
+            fetchDashboardData();
+            fetchPetRecords();
+          } else {
+            alert('Failed to update appointment status');
+          }
+        } else {
+          alert('Failed to save medical records');
+        }
       }
     } catch (error) {
       console.error('Error completing medical examination:', error);
@@ -554,6 +606,82 @@ const AdminDashboard: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching pet records:', error);
+    }
+  };
+
+  const fetchAnalyticsData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://127.0.0.1:8000/api/admin/analytics', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.error('Unauthorized access to analytics data');
+          return;
+        }
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.status) {
+        setAnalyticsData(data.analytics);
+      } else {
+        console.error('Analytics API returned error:', data.message);
+        // Set empty analytics data to stop loading state
+        setAnalyticsData({
+          monthlyAppointments: {},
+          todayEarnings: 0,
+          monthlyEarnings: 0,
+          avgMonthlyAppointments: 0
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching analytics data:', error);
+      // Set empty analytics data to stop loading state
+      setAnalyticsData({
+        monthlyAppointments: {},
+        todayEarnings: 0,
+        monthlyEarnings: 0,
+        avgMonthlyAppointments: 0
+      });
+    }
+  };
+
+  const fetchRecentRecords = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://127.0.0.1:8000/api/admin/recent-appointments', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.error('Unauthorized access to recent records');
+          return;
+        }
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.status) {
+        setRecentRecords(data.appointments || []);
+      } else {
+        console.error('Recent records API returned error:', data.message);
+        setRecentRecords([]);
+      }
+    } catch (error) {
+      console.error('Error fetching recent records:', error);
+      setRecentRecords([]);
     }
   };
 
@@ -675,6 +803,16 @@ const AdminDashboard: React.FC = () => {
                   }`}
                 >
                   Pet Records
+                </button>
+                <button
+                  onClick={() => setActiveTab('analytics')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'analytics'
+                      ? 'border-teal-500 text-teal-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Analytics
                 </button>
               </nav>
             </div>
@@ -1008,6 +1146,169 @@ const AdminDashboard: React.FC = () => {
                   <div className="text-center py-8">
                     <FaClipboardList className="mx-auto text-4xl text-gray-400 mb-4" />
                     <p className="text-gray-500">No pet records found.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Analytics Tab */}
+          {activeTab === 'analytics' && (
+            <div className="space-y-6">
+              {/* Analytics Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                      </svg>
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-600">Today's Earnings</p>
+                      <p className="text-2xl font-bold text-gray-900">₱{analyticsData?.todayEarnings || 0}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-600">Monthly Earnings</p>
+                      <p className="text-2xl font-bold text-gray-900">₱{analyticsData?.monthlyEarnings || 0}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow p-6">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                      <FaCalendarAlt className="text-purple-600 text-xl" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-600">Avg Monthly Appointments</p>
+                      <p className="text-2xl font-bold text-gray-900">{analyticsData?.avgMonthlyAppointments || 0}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Monthly Appointments Chart */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Appointments Report</h3>
+                {analyticsData && analyticsData.monthlyAppointments ? (
+                  <div className="space-y-4">
+                    {Object.entries(analyticsData.monthlyAppointments).map(([month, count]: [string, any]) => {
+                      const countNum = Number(count);
+                      const maxCount = Math.max(1, ...Object.values(analyticsData.monthlyAppointments).map((val: any) => Number(val)));
+                      const percentage = maxCount > 0 ? (countNum / maxCount) * 100 : 0;
+                      
+                      return (
+                        <div key={month} className="flex items-center space-x-4">
+                          <div className="w-24 text-sm font-medium text-gray-700">
+                            {month}
+                          </div>
+                          <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
+                            <div
+                              className="bg-teal-600 h-6 rounded-full flex items-center justify-end pr-3 transition-all duration-500"
+                              style={{ width: `${Math.max(percentage, countNum > 0 ? 10 : 0)}%` }}
+                            >
+                              {countNum > 0 && (
+                                <span className="text-white text-sm font-medium">
+                                  {countNum}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="w-16 text-sm text-gray-600">
+                            {countNum} apt{countNum !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    {analyticsData === null ? (
+                      <>
+                        <FaSpinner className="animate-spin text-4xl text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-500">Loading chart data...</p>
+                      </>
+                    ) : (
+                      <>
+                        <FaClipboardList className="mx-auto text-4xl text-gray-400 mb-4" />
+                        <p className="text-gray-500">No appointment data available.</p>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Recent Records */}
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Appointments</h3>
+                <p className="text-sm text-gray-600 mb-4">Three most recent appointments (excluding cancelled)</p>
+                
+                {recentRecords.length > 0 ? (
+                  <div className="space-y-4">
+                    {recentRecords.slice(0, 3).map((appointment) => (
+                      <div key={appointment.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <h4 className="text-lg font-medium text-gray-900">
+                                {appointment.user.name}
+                              </h4>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(appointment.status)}`}>
+                                {getStatusIcon(appointment.status)}
+                                <span className="ml-1">{appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}</span>
+                              </span>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+                              <div>
+                                <p><span className="font-medium">Email:</span> {appointment.user.email}</p>
+                                <p><span className="font-medium">Date:</span> {new Date(appointment.appointment_date).toLocaleDateString()}</p>
+                                <p><span className="font-medium">Time:</span> {appointment.appointment_time}</p>
+                              </div>
+                              <div>
+                                <p><span className="font-medium">Pets:</span> {appointment.pets.map(pet => pet.name || 'Unnamed').join(', ')}</p>
+                                <p><span className="font-medium">Services:</span> {appointment.services.map(service => service.name).join(', ')}</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="ml-4">
+                            {appointment.status === 'pending' && (
+                              <button
+                                onClick={() => handleViewDetails(appointment)}
+                                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors text-sm"
+                              >
+                                View Details
+                              </button>
+                            )}
+                            {appointment.status !== 'pending' && (
+                              <button
+                                onClick={() => handleViewDetails(appointment)}
+                                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                              >
+                                View Details
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <FaClipboardList className="mx-auto text-4xl text-gray-400 mb-4" />
+                    <p className="text-gray-500">No recent appointments found.</p>
                   </div>
                 )}
               </div>
@@ -1409,9 +1710,14 @@ const AdminDashboard: React.FC = () => {
           <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[95vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-              <h3 className="text-xl font-semibold text-gray-900">
-                Medical Examination - Appointment #{appointmentToComplete.id}
-              </h3>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">
+                  Complete Appointment #{appointmentToComplete.id}
+                </h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Medical examination is optional - only fill if health checkup was performed
+                </p>
+              </div>
               <button
                 onClick={cancelMedicalExamination}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -1428,14 +1734,14 @@ const AdminDashboard: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Doctor's Name *
+                      Doctor's Name (required only for medical exams)
                     </label>
                     <input
                       type="text"
                       value={medicalExam.doctorName}
                       onChange={(e) => updateMedicalExam('doctorName', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      placeholder="Enter doctor's name"
+                      placeholder="Enter doctor's name (optional)"
                     />
                   </div>
                   <div>
@@ -1462,7 +1768,7 @@ const AdminDashboard: React.FC = () => {
                   {/* Test Type Selection */}
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Test Type *
+                      Test Type (optional - for medical examinations only)
                     </label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {Object.keys(testOptions).map((testType) => (
@@ -1508,11 +1814,11 @@ const AdminDashboard: React.FC = () => {
 
                   {/* Test Results */}
                   <div className="bg-white rounded p-4 mb-4">
-                    <h5 className="font-medium text-gray-900 mb-3">Test Results</h5>
+                    <h5 className="font-medium text-gray-900 mb-3">Medical Examination (Optional)</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Weight (kg) *
+                          Weight (kg)
                         </label>
                         <input
                           type="number"
@@ -1520,19 +1826,19 @@ const AdminDashboard: React.FC = () => {
                           value={petRecord.weight}
                           onChange={(e) => updatePetRecord(petIndex, 'weight', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                          placeholder="Enter weight in kg"
+                          placeholder="Enter weight in kg (optional)"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Symptoms *
+                          Symptoms
                         </label>
                         <input
                           type="text"
                           value={petRecord.symptoms}
                           onChange={(e) => updatePetRecord(petIndex, 'symptoms', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                          placeholder="Enter symptoms"
+                          placeholder="Enter symptoms (optional)"
                         />
                       </div>
                     </div>
@@ -1564,14 +1870,14 @@ const AdminDashboard: React.FC = () => {
                     </div>
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Diagnosis *
+                        Diagnosis
                       </label>
                       <input
                         type="text"
                         value={petRecord.diagnosis}
                         onChange={(e) => updatePetRecord(petIndex, 'diagnosis', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                        placeholder="Enter diagnosis"
+                        placeholder="Enter diagnosis (optional)"
                       />
                     </div>
                     <div>
@@ -1686,7 +1992,7 @@ const AdminDashboard: React.FC = () => {
                       Saving...
                     </>
                   ) : (
-                    'Complete Examination'
+                    'Complete Appointment'
                   )}
                 </button>
               </div>
