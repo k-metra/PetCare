@@ -10,6 +10,15 @@ use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\MedicalRecordController;
 
+// Test route for CORS verification
+Route::get('/test', function () {
+    return response()->json([
+        'message' => 'CORS working! Backend connected successfully.',
+        'timestamp' => now(),
+        'origin' => request()->header('Origin')
+    ]);
+});
+
 Route::post('/register', [UserController::class, 'register']);
 
 Route::post('/login', [UserController::class, 'login']);

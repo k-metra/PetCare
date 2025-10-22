@@ -19,7 +19,12 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:3000', 'http://127.0.0.1:3000'],
+        'allowed_origins' => [
+        'http://localhost:3000', 
+        'http://127.0.0.1:3000',
+        'https://pet-care-pwi29pk2b-k-metras-projects.vercel.app',
+        'https://pet-care-pink-six.vercel.app'
+    ],
 
     'allowed_origins_patterns' => [],
 

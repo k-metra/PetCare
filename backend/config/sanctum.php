@@ -17,7 +17,8 @@ return [
 
     'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
         '%s%s',
-        'localhost,localhost:3000,127.0.0.1,petcare-production-2613.up.railway.app,::1',
+        'localhost,localhost:3000,127.0.0.1,pet-care-pink-six.vercel.app,
+        pet-care-pwi29pk2b-k-metras-projects.vercel.app,::1',
         Sanctum::currentApplicationUrlWithPort(),
         // Sanctum::currentRequestHost(),
     ))),
