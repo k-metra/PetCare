@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\MedicalRecordController;
 
 Route::post('/register', [UserController::class, 'register']);
 
@@ -37,7 +38,14 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware(['auth:sanctum', 'role:staff,admin'])->group(function () {
     Route::get('/admin/appointments', [AdminController::class, 'getAllAppointments']);
     Route::put('/admin/appointments/{id}/status', [AdminController::class, 'updateAppointmentStatus']);
+    Route::delete('/admin/appointments/{id}', [AdminController::class, 'deleteAppointment']);
     Route::get('/admin/dashboard', [AdminController::class, 'getDashboardStats']);
+    
+    // Medical Records routes
+    Route::post('/medical-records', [MedicalRecordController::class, 'store']);
+    Route::get('/medical-records', [MedicalRecordController::class, 'index']);
+    Route::get('/medical-records/pet/{petId}', [MedicalRecordController::class, 'getPetRecords']);
+    Route::get('/medical-records/search', [MedicalRecordController::class, 'search']);
 });
 
 // Admin only routes (require admin role)
