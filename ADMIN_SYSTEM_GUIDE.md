@@ -156,7 +156,7 @@ const isStaff = ['staff', 'admin'].includes(user.role);
 const fetchAdminData = async () => {
   const token = localStorage.getItem('token');
   
-  const response = await fetch('http://127.0.0.1:8000/api/admin/dashboard', {
+  const response = await fetch('http://petcare-production-2613.up.railway.app/api/admin/dashboard', {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Accept': 'application/json'

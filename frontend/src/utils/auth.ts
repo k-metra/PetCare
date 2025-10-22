@@ -10,7 +10,7 @@ export const logout = async () => {
     }
 
     // Call logout API
-    const response = await fetch('http://127.0.0.1:8000/api/logout', {
+    const response = await fetch('http://petcare-production-2613.up.railway.app/api/logout', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -49,7 +49,7 @@ export const logoutAll = async () => {
       return { success: true, message: 'Already logged out' };
     }
 
-    const response = await fetch('http://127.0.0.1:8000/api/logout-all', {
+    const response = await fetch('http://petcare-production-2613.up.railway.app/api/logout-all', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

@@ -23,7 +23,7 @@ export default function Register() {
         setLoading(true);
         // Handle login logic here
 
-        await fetch('http://127.0.0.1:8000/api/register', {
+        await fetch('http://petcare-production-2613.up.railway.app/api/register', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

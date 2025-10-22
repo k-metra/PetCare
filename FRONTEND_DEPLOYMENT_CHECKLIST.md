@@ -29,7 +29,7 @@
 Add these environment variables:
 
 ```
-REACT_APP_API_URL = http://127.0.0.1:8000
+REACT_APP_API_URL = http://petcare-production-2613.up.railway.app
 ```
 
 *(Update this later when you deploy your backend)*

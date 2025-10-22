@@ -56,7 +56,7 @@ export default function MyAppointments() {
             setLoading(true);
             const token = localStorage.getItem('token');
             
-            const response = await fetch('http://127.0.0.1:8000/api/appointments', {
+            const response = await fetch('http://petcare-production-2613.up.railway.app/api/appointments', {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Accept': 'application/json'

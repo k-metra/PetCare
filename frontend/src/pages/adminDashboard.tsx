@@ -199,7 +199,7 @@ const AdminDashboard: React.FC = () => {
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/admin/dashboard', {
+      const response = await fetch('http://petcare-production-2613.up.railway.app/api/admin/dashboard', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'
@@ -220,7 +220,7 @@ const AdminDashboard: React.FC = () => {
   const fetchAppointments = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/admin/appointments', {
+      const response = await fetch('http://petcare-production-2613.up.railway.app/api/admin/appointments', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'
@@ -255,7 +255,7 @@ const AdminDashboard: React.FC = () => {
     setUpdatingStatus(appointmentId);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://127.0.0.1:8000/api/admin/appointments/${appointmentId}/status`, {
+      const response = await fetch(`http://petcare-production-2613.up.railway.app/api/admin/appointments/${appointmentId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -302,7 +302,7 @@ const AdminDashboard: React.FC = () => {
     if (appointment.status === 'completed') {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`http://127.0.0.1:8000/api/medical-records?appointment_id=${appointment.id}`, {
+        const response = await fetch(`http://petcare-production-2613.up.railway.app/api/medical-records?appointment_id=${appointment.id}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json'
@@ -342,7 +342,7 @@ const AdminDashboard: React.FC = () => {
     setUpdatingStatus(appointmentId);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://127.0.0.1:8000/api/admin/appointments/${appointmentId}`, {
+      const response = await fetch(`http://petcare-production-2613.up.railway.app/api/admin/appointments/${appointmentId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -496,7 +496,7 @@ const AdminDashboard: React.FC = () => {
       // If there's no medical data, skip saving medical records and just mark completed
       const token = localStorage.getItem('token');
       if (!hasMedicalData) {
-        const statusResponse = await fetch(`http://127.0.0.1:8000/api/admin/appointments/${appointmentToComplete.id}/status`, {
+        const statusResponse = await fetch(`http://petcare-production-2613.up.railway.app/api/admin/appointments/${appointmentToComplete.id}/status`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -526,7 +526,7 @@ const AdminDashboard: React.FC = () => {
         }
       } else {
         // Save medical records when medical data exists
-        const response = await fetch('http://127.0.0.1:8000/api/medical-records', {
+        const response = await fetch('http://petcare-production-2613.up.railway.app/api/medical-records', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -543,7 +543,7 @@ const AdminDashboard: React.FC = () => {
 
         if (response.ok) {
           // Update appointment status to completed
-          const statusResponse = await fetch(`http://127.0.0.1:8000/api/admin/appointments/${appointmentToComplete.id}/status`, {
+          const statusResponse = await fetch(`http://petcare-production-2613.up.railway.app/api/admin/appointments/${appointmentToComplete.id}/status`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -593,7 +593,7 @@ const AdminDashboard: React.FC = () => {
   const fetchPetRecords = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/medical-records', {
+      const response = await fetch('http://petcare-production-2613.up.railway.app/api/medical-records', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'
@@ -612,7 +612,7 @@ const AdminDashboard: React.FC = () => {
   const fetchAnalyticsData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/admin/analytics', {
+      const response = await fetch('http://petcare-production-2613.up.railway.app/api/admin/analytics', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'
@@ -656,7 +656,7 @@ const AdminDashboard: React.FC = () => {
   const fetchRecentRecords = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/admin/recent-appointments', {
+      const response = await fetch('http://petcare-production-2613.up.railway.app/api/admin/recent-appointments', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'

@@ -32,12 +32,12 @@ git push -u origin main
 ```
 
 ### Step 2: Update API URLs in Frontend
-You need to replace all hardcoded `http://127.0.0.1:8000` URLs with the new API utility.
+You need to replace all hardcoded `http://petcare-production-2613.up.railway.app` URLs with the new API utility.
 
 **Example - Update a file:**
 ```typescript
 // OLD:
-const response = await fetch('http://127.0.0.1:8000/api/appointments', {
+const response = await fetch('http://petcare-production-2613.up.railway.app/api/appointments', {
 
 // NEW:
 import { apiUrl } from '../utils/apiConfig';

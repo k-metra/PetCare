@@ -7,7 +7,7 @@ This document outlines the complete integration between the React frontend and L
 
 ### Base URL
 ```
-http://127.0.0.1:8000/api
+http://petcare-production-2613.up.railway.app/api
 ```
 
 ### Authentication
@@ -173,7 +173,7 @@ const appointmentPayload = {
   services: selectedServices
 };
 
-const response = await fetch('http://127.0.0.1:8000/api/appointments', {
+const response = await fetch('http://petcare-production-2613.up.railway.app/api/appointments', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -200,7 +200,7 @@ const response = await fetch('http://127.0.0.1:8000/api/appointments', {
 ## Testing the Integration
 
 ### Prerequisites:
-1. Laravel backend running on `http://127.0.0.1:8000`
+1. Laravel backend running on `http://petcare-production-2613.up.railway.app`
 2. React frontend running on `http://localhost:3000`
 3. User account created and verified
 4. User logged in with valid token

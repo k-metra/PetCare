@@ -233,7 +233,7 @@ import MyAppointments from './pages/myAppointments';
 ### API Testing:
 ```bash
 # Test appointments endpoint
-curl -X GET http://127.0.0.1:8000/api/appointments \
+curl -X GET http://petcare-production-2613.up.railway.app/api/appointments \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Accept: application/json"
 ```

@@ -391,7 +391,7 @@ const SetAppointment: React.FC = () => {
         notes: '' // You can add notes field to the form if needed
       };
 
-      const response = await fetch('http://127.0.0.1:8000/api/appointments', {
+      const response = await fetch('http://petcare-production-2613.up.railway.app/api/appointments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

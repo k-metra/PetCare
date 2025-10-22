@@ -121,7 +121,7 @@ export const logout = async () => {
     }
 
     // Call logout API
-    const response = await fetch('http://127.0.0.1:8000/api/logout', {
+    const response = await fetch('http://petcare-production-2613.up.railway.app/api/logout', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -237,12 +237,12 @@ A reusable logout button component with:
 ### API Testing
 ```bash
 # Test logout endpoint
-curl -X POST http://127.0.0.1:8000/api/logout \
+curl -X POST http://petcare-production-2613.up.railway.app/api/logout \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json"
 
 # Test logout all endpoint
-curl -X POST http://127.0.0.1:8000/api/logout-all \
+curl -X POST http://petcare-production-2613.up.railway.app/api/logout-all \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json"
 ```
