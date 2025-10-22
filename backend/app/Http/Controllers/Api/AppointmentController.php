@@ -41,7 +41,10 @@ class AppointmentController extends Controller
                     'status' => false,
                     'message' => 'Validation failed',
                     'errors' => $validator->errors()
-                ], 422);
+                ], 422)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
             }
 
             // Check if the selected date is not Sunday
@@ -50,7 +53,10 @@ class AppointmentController extends Controller
                 return response()->json([
                     'status' => false,
                     'message' => 'Appointments cannot be scheduled on Sundays'
-                ], 422);
+                ], 422)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
             }
 
             // Start database transaction
@@ -92,7 +98,10 @@ class AppointmentController extends Controller
                 'status' => true,
                 'message' => 'Appointment scheduled successfully',
                 'appointment' => $appointment
-            ], 201);
+            ], 201)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
 
         } catch (\Exception $e) {
             DB::rollback();
@@ -100,7 +109,10 @@ class AppointmentController extends Controller
                 'status' => false,
                 'message' => 'Failed to schedule appointment',
                 'error' => $e->getMessage()
-            ], 500);
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         }
     }
 
@@ -120,14 +132,20 @@ class AppointmentController extends Controller
             return response()->json([
                 'status' => true,
                 'appointments' => $appointments
-            ], 200);
+            ], 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
 
         } catch (\Exception $e) {
             return response()->json([
                 'status' => false,
                 'message' => 'Failed to retrieve appointments',
                 'error' => $e->getMessage()
-            ], 500);
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         }
     }
 
@@ -141,13 +159,19 @@ class AppointmentController extends Controller
             return response()->json([
                 'status' => true,
                 'services' => $services
-            ], 200);
+            ], 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         } catch (\Exception $e) {
             return response()->json([
                 'status' => false,
                 'message' => 'Failed to retrieve services',
                 'error' => $e->getMessage()
-            ], 500);
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         }
     }
 }

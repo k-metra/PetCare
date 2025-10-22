@@ -27,13 +27,19 @@ class UserController extends Controller
         ]);
 
         if (!Auth::attempt($validatedData)) {
-            return response()->json(['status' => false, 'message' => 'Invalid email or password.'], 401);
+            return response()->json(['status' => false, 'message' => 'Invalid email or password.'], 401)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         }
 
         $user = Auth::user();
 
         if (!$user->hasVerifiedEmail()) {
-            return response()->json(['status' => false, 'message' => 'Email not verified. Please verify your email before logging in.'], 403);
+            return response()->json(['status' => false, 'message' => 'Email not verified. Please verify your email before logging in.'], 403)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -59,14 +65,23 @@ class UserController extends Controller
             ]);
 
             event(new Registered($user));
-            return response()->json(['status' => true, 'message' => 'User registered successfully', 'user' => $user], 201);
+            return response()->json(['status' => true, 'message' => 'User registered successfully', 'user' => $user], 201)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         } catch (\Exception $e) {
-            return response()->json(['status' => false, 'message' => 'User registration failed', 'error' => $e->getMessage()], 500);
+            return response()->json(['status' => false, 'message' => 'User registration failed', 'error' => $e->getMessage()], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         }
     }
 
     public function verifyEmail(Request $request) {
-        return response()->json(['status' => true, 'message' => 'Email verification link sent! Please check your email.'], 200);
+        return response()->json(['status' => true, 'message' => 'Email verification link sent! Please check your email.'], 200)
+            ->header('Access-Control-Allow-Origin', '*')
+            ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+            ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
     }
 
     public function emailVerificationRequest(Request $request, $id, $hash) {
@@ -93,7 +108,10 @@ class UserController extends Controller
 
     public function resendEmailVerification(Request $request) {
         $request->user()->sendEmailVerificationNotification();
-        return response()->json(['status' => true, 'message' => 'Verification link sent! Please check your email.'], 200);
+        return response()->json(['status' => true, 'message' => 'Verification link sent! Please check your email.'], 200)
+            ->header('Access-Control-Allow-Origin', '*')
+            ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+            ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
     }
 
     /**
@@ -107,13 +125,19 @@ class UserController extends Controller
             return response()->json([
                 'status' => true, 
                 'message' => 'Logout successful'
-            ], 200);
+            ], 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         } catch (\Exception $e) {
             return response()->json([
                 'status' => false, 
                 'message' => 'Logout failed', 
                 'error' => $e->getMessage()
-            ], 500);
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         }
     }
 
@@ -128,13 +152,19 @@ class UserController extends Controller
             return response()->json([
                 'status' => true, 
                 'message' => 'Logout from all devices successful'
-            ], 200);
+            ], 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         } catch (\Exception $e) {
             return response()->json([
                 'status' => false, 
                 'message' => 'Logout from all devices failed', 
                 'error' => $e->getMessage()
-            ], 500);
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         }
     }
 
@@ -146,13 +176,19 @@ class UserController extends Controller
             return response()->json([
                 'status' => true,
                 'user' => $request->user()
-            ], 200);
+            ], 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         } catch (\Exception $e) {
             return response()->json([
                 'status' => false,
                 'message' => 'Failed to get user info',
                 'error' => $e->getMessage()
-            ], 500);
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         }
     }
 }
