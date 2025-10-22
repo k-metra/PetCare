@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AdminController extends Controller
 {
@@ -191,6 +192,150 @@ class AdminController extends Controller
             return response()->json([
                 'status' => false,
                 'message' => 'Failed to delete appointment',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get analytics data for admin dashboard
+     */
+    public function getAnalytics(Request $request)
+    {
+        try {
+            // Get current date info
+            $currentDate = now();
+            $currentMonth = $currentDate->format('Y-m');
+            $today = $currentDate->format('Y-m-d');
+
+            // Monthly appointments for the last 12 months
+            $monthlyAppointments = [];
+            for ($i = 11; $i >= 0; $i--) {
+                $date = $currentDate->copy()->subMonths($i);
+                $monthKey = $date->format('M Y');
+                $yearMonth = $date->format('Y-m');
+                
+                $count = Appointment::whereYear('appointment_date', $date->year)
+                    ->whereMonth('appointment_date', $date->month)
+                    ->whereIn('status', ['pending', 'confirmed', 'completed'])
+                    ->count();
+                    
+                $monthlyAppointments[$monthKey] = $count;
+            }
+
+            // Today's earnings (from completed appointments)
+            $todayEarnings = 0;
+            $todayAppointments = Appointment::with(['services', 'pets'])
+                ->whereDate('appointment_date', $today)
+                ->where('status', 'completed')
+                ->get();
+
+            foreach ($todayAppointments as $appointment) {
+                // Add service costs
+                $todayEarnings += $appointment->services->sum('price');
+                
+                // Add grooming costs
+                foreach ($appointment->pets as $pet) {
+                    if ($pet->grooming_details) {
+                        $groomingDetails = is_string($pet->grooming_details) 
+                            ? json_decode($pet->grooming_details, true) 
+                            : $pet->grooming_details;
+                        
+                        if (isset($groomingDetails['price'])) {
+                            $todayEarnings += $groomingDetails['price'];
+                        }
+                    }
+                }
+                
+                // Add medical test costs
+                $medicalRecords = DB::table('medical_records')
+                    ->where('appointment_id', $appointment->id)
+                    ->get();
+                
+                foreach ($medicalRecords as $record) {
+                    $todayEarnings += $record->test_cost;
+                }
+            }
+
+            // Monthly earnings (current month)
+            $monthlyEarnings = 0;
+            $monthlyAppointmentsCompleted = Appointment::with(['services', 'pets'])
+                ->whereYear('appointment_date', $currentDate->year)
+                ->whereMonth('appointment_date', $currentDate->month)
+                ->where('status', 'completed')
+                ->get();
+
+            foreach ($monthlyAppointmentsCompleted as $appointment) {
+                // Add service costs
+                $monthlyEarnings += $appointment->services->sum('price');
+                
+                // Add grooming costs
+                foreach ($appointment->pets as $pet) {
+                    if ($pet->grooming_details) {
+                        $groomingDetails = is_string($pet->grooming_details) 
+                            ? json_decode($pet->grooming_details, true) 
+                            : $pet->grooming_details;
+                        
+                        if (isset($groomingDetails['price'])) {
+                            $monthlyEarnings += $groomingDetails['price'];
+                        }
+                    }
+                }
+                
+                // Add medical test costs
+                $medicalRecords = DB::table('medical_records')
+                    ->where('appointment_id', $appointment->id)
+                    ->get();
+                
+                foreach ($medicalRecords as $record) {
+                    $monthlyEarnings += $record->test_cost;
+                }
+            }
+
+            // Average monthly appointments (last 12 months)
+            $totalAppointments = array_sum($monthlyAppointments);
+            $avgMonthlyAppointments = round($totalAppointments / 12, 1);
+
+            return response()->json([
+                'status' => true,
+                'analytics' => [
+                    'monthlyAppointments' => $monthlyAppointments,
+                    'todayEarnings' => $todayEarnings,
+                    'monthlyEarnings' => $monthlyEarnings,
+                    'avgMonthlyAppointments' => $avgMonthlyAppointments
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to retrieve analytics data',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get recent appointments (excluding cancelled)
+     */
+    public function getRecentAppointments(Request $request)
+    {
+        try {
+            $recentAppointments = Appointment::with(['user', 'pets', 'services'])
+                ->whereIn('status', ['pending', 'confirmed', 'completed'])
+                ->orderBy('created_at', 'desc')
+                ->limit(10) // Get more than 3 in case some need to be filtered
+                ->get();
+
+            return response()->json([
+                'status' => true,
+                'appointments' => $recentAppointments
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to retrieve recent appointments',
                 'error' => $e->getMessage()
             ], 500);
         }
