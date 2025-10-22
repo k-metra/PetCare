@@ -15,13 +15,25 @@ Route::get('/test', function () {
     return response()->json([
         'message' => 'CORS working! Backend connected successfully.',
         'timestamp' => now(),
-        'origin' => request()->header('Origin')
-    ]);
+        'origin' => request()->header('Origin'),
+        'headers' => request()->headers->all()
+    ])->header('Access-Control-Allow-Origin', '*')
+      ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+      ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
 });
 
 Route::post('/register', [UserController::class, 'register']);
 
 Route::post('/login', [UserController::class, 'login']);
+
+// Handle preflight OPTIONS requests
+Route::options('{any}', function () {
+    return response('', 200)
+        ->header('Access-Control-Allow-Origin', '*')
+        ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+        ->header('Access-Control-Max-Age', 86400);
+})->where('any', '.*');
 
 Route::get('/email/verify', [UserController::class, 'verifyEmail'])->middleware('auth:sanctum')->name('verification.notice');
 
