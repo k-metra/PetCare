@@ -11,23 +11,26 @@ import MyAppointments from './pages/myAppointments';
 
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import EmailVerified from './pages/emailVerified';
+import { NotificationProvider } from './contexts/notificationContext';
 
 function App() {
   return (
-    <Router>
-      <div className="App">
-        <Routes>
-          <Route path="/home" element={<Home />} />
-          <Route path="" element={<Navigate to="/home" />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/email/verified" element={<EmailVerified />} />
-          <Route path="/set-appointment" element={<SetAppointment />} />
-          <Route path="/my-appointments" element={<MyAppointments />} />
-          <Route path="/admin-dashboard" element={<AdminDashboard />} />
-        </Routes>
-      </div>
-    </Router>
+    <NotificationProvider>
+      <Router>
+        <div className="App">
+          <Routes>
+            <Route path="/home" element={<Home />} />
+            <Route path="" element={<Navigate to="/home" />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/email/verified" element={<EmailVerified />} />
+            <Route path="/set-appointment" element={<SetAppointment />} />
+            <Route path="/my-appointments" element={<MyAppointments />} />
+            <Route path="/admin-dashboard" element={<AdminDashboard />} />
+          </Routes>
+        </div>
+      </Router>
+    </NotificationProvider>
   );
 }
 
