@@ -156,4 +156,43 @@ class AdminController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Delete appointment (admin/staff only - for canceled or pending appointments)
+     */
+    public function deleteAppointment(Request $request, $id)
+    {
+        try {
+            $appointment = Appointment::findOrFail($id);
+            
+            // Only allow deletion of canceled or pending appointments
+            if (!in_array($appointment->status, ['cancelled', 'pending'])) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Only canceled or pending appointments can be deleted'
+                ], 400);
+            }
+
+            // Delete related records first (due to foreign key constraints)
+            // Note: Laravel will handle cascade deletes if properly set up in migrations
+            $appointment->delete();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Appointment deleted successfully'
+            ], 200);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Appointment not found'
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to delete appointment',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
