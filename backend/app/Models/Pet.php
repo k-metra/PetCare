@@ -10,7 +10,13 @@ class Pet extends Model
     protected $fillable = [
         'appointment_id',
         'type',
-        'breed'
+        'breed',
+        'name',
+        'grooming_details'
+    ];
+
+    protected $casts = [
+        'grooming_details' => 'array'
     ];
 
     /**
