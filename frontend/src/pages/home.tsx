@@ -17,6 +17,9 @@ import { FaEnvelope } from "react-icons/fa";
 import { FaHouse } from "react-icons/fa6";
 import { FaArrowCircleRight } from "react-icons/fa";
 import { useNavigate } from "react-router-dom"
+import Product from "../components/product"
+
+import { productsList } from "../config/ProductsList"
 
 export default function Home() {
 
@@ -28,6 +31,7 @@ export default function Home() {
 
     return (
         <>
+        <title>Pet Medics - Veterinary Clinic</title>
         <Header />
 
         <main className="h-screen w-full max-w-full top-16 md:top-20 pt-4 md:pt-8 bg-gradient-to-b from-[#1BA3AB] to-[#145956]">
@@ -104,13 +108,37 @@ export default function Home() {
                     />
                 </motion.div>
             </section>
+            
+            <section id="products" className="min-h-screen w-full bg-gradient-to-b px-6 md:px-32 from-[#145956] to-[#0E3B3E] items-center justify-center flex flex-col py-12">
+                {/* Products Section */}
+                <motion.div
+                    className="w-full text-white"
+                    initial={{ opacity: 0, y: 50 }}
+                    whileInView={{ opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }}
+                >
+                    <h2 className="text-2xl md:text-3xl font-bold drop-shadow-lg text-center mb-8">Our Products</h2>
+                    <p className="text-center mb-8">Explore our range of high-quality pet care products designed to keep your furry friends happy and healthy.</p>
+
+                    <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-6 place-content-center place-items-center justify-center">
+                        {productsList.map((product, idx) => (
+                            <Product
+                                key={idx}
+                                img={product.img}
+                                title={product.title}
+                                description={product.description}
+                                price={product.price}
+                            />
+                        ))}
+                    </div>
+                </motion.div>
+            </section>
 
             <section id="contact" className="min-h-screen mt-11 w-full text-center flex flex-col justify-center items-center bg-gradient-to-b px-6 md:px-32 from-[#fbfbfb] to-black]">
                 {/* Contact Section */}
                 <motion.div
                     className="w-full text-[#444444]"
                     initial={{ opacity: 0, y: 50 }}
-                    whileInView={{ opacity: 1, y: 0 }}
+                    whileInView={{ opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }}
                 >
                     <h2 className="text-lg md:text-xl font-semibold text-center mb-1">Contact Us</h2>
                     <p className="text-sm md:text-md drop-shadow-md mb-8">Have questions or need assistance? Reach out to our friendly team for support and information about our services.</p>
