@@ -35,8 +35,8 @@ export default function Home() {
         <Header />
 
         <main className="h-screen w-full max-w-full top-16 md:top-20 pt-4 md:pt-8 bg-gradient-to-b from-[#1BA3AB] to-[#145956]">
-            <section id="home" className="w-full h-3/4 flex flex-col md:flex-row md:justify-normal justify-center items-center">
-                <img src={home_image} alt="Home Image" className="object-cover h-full w-full"></img>
+            <section id="home" className="w-full min-h-screen flex flex-col md:flex-row md:justify-normal justify-center items-center">
+                <img src={home_image} alt="Home Image" className="w-full h-screen object-cover object-center md:h-full"></img>
 
                 <motion.div className="w-full self-center md:w-1/2 md:ml-12 h-full absolute flex flex-col justify-center items-center px-4 md:px-8 text-center md:text-left"
                     initial={{ opacity: 0, y: 50 }}
