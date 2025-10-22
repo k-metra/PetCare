@@ -1,5 +1,5 @@
 // API Configuration utility
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://petcare-production-2613.up.railway.app';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://petcare-production-2-way.up.railway.app';
 
 export const getApiUrl = (endpoint: string): string => {
   // Remove leading slash if present to avoid double slashes
