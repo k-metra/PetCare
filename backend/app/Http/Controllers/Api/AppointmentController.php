@@ -24,6 +24,13 @@ class AppointmentController extends Controller
                 'pets' => 'required|array|min:1|max:5',
                 'pets.*.type' => 'required|in:dog,cat',
                 'pets.*.breed' => 'required|string|max:255',
+                'pets.*.name' => 'required|string|max:255',
+                'pets.*.groomingDetails' => 'nullable|array',
+                'pets.*.groomingDetails.*' => 'array', // Each category is an array
+                'pets.*.groomingDetails.*.*.service' => 'required|string',
+                'pets.*.groomingDetails.*.*.size' => 'required|string',
+                'pets.*.groomingDetails.*.*.price' => 'required|numeric',
+                'pets.*.groomingDetails.*.*.package' => 'required|string',
                 'services' => 'required|array|min:1',
                 'services.*' => 'required|string',
                 'notes' => 'nullable|string'
@@ -62,7 +69,9 @@ class AppointmentController extends Controller
             foreach ($request->pets as $petData) {
                 $appointment->pets()->create([
                     'type' => $petData['type'],
-                    'breed' => $petData['breed']
+                    'breed' => $petData['breed'],
+                    'name' => $petData['name'],
+                    'grooming_details' => $petData['groomingDetails'] ?? null
                 ]);
             }
 
