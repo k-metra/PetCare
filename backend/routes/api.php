@@ -40,6 +40,8 @@ Route::middleware(['auth:sanctum', 'role:staff,admin'])->group(function () {
     Route::put('/admin/appointments/{id}/status', [AdminController::class, 'updateAppointmentStatus']);
     Route::delete('/admin/appointments/{id}', [AdminController::class, 'deleteAppointment']);
     Route::get('/admin/dashboard', [AdminController::class, 'getDashboardStats']);
+    Route::get('/admin/analytics', [AdminController::class, 'getAnalytics']);
+    Route::get('/admin/recent-appointments', [AdminController::class, 'getRecentAppointments']);
     
     // Medical Records routes
     Route::post('/medical-records', [MedicalRecordController::class, 'store']);
