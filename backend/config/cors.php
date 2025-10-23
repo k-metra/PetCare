@@ -15,11 +15,11 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'register', 'api/login'],
+    'paths' => ['api/*', 'api/', 'sanctum/csrf-cookie', 'login', 'register', 'api/login'],
 
-    'allowed_methods' => ['*'],
+    'allowed_methods' => ['PUT', 'POST', 'GET', 'DELETE', 'OPTIONS'],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => ['https://pet-care-pink-six.vercel.app'],
 
     'allowed_origins_patterns' => [],
 
