@@ -39,6 +39,12 @@ export default function MyAppointments() {
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    const appointmentId = params.get('id');
+
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -50,6 +56,12 @@ export default function MyAppointments() {
 
         fetchAppointments();
     }, [navigate]);
+
+    useEffect(() => {
+        if (action && appointmentId) {
+            // Modal will be shown based on action and appointmentId state
+        }
+    }, [action, appointmentId])
 
     const fetchAppointments = async () => {
         try {
@@ -131,6 +143,62 @@ export default function MyAppointments() {
     const isUpcoming = (dateString: string, timeString: string) => {
         const appointmentDateTime = new Date(`${dateString} ${timeString}`);
         return appointmentDateTime > new Date();
+    };
+
+    const closeModal = () => {
+        navigate('/my-appointments', { replace: true });
+    };
+
+    const handleConfirmAction = async () => {
+        if (!action || !appointmentId) return;
+
+        setIsProcessing(true);
+        try {
+            const token = localStorage.getItem('token');
+            
+            if (action === 'cancel') {
+                // Handle appointment cancellation
+                const response = await fetch(`http://127.0.0.1:8000/api/appointments/${appointmentId}/cancel`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.status) {
+                    // Update local state
+                    setAppointments(prev => 
+                        prev.map(apt => 
+                            apt.id === parseInt(appointmentId) 
+                                ? { ...apt, status: 'cancelled' as const }
+                                : apt
+                        )
+                    );
+                    setError('');
+                } else {
+                    setError('Failed to cancel appointment. Please try again.');
+                }
+            } else if (action === 'reschedule') {
+                // For reschedule, redirect to appointment booking with existing data
+                navigate(`/set-appointment?reschedule=${appointmentId}`);
+                return;
+            }
+        } catch (err) {
+            setError('Network error. Please try again.');
+            console.error('Error processing appointment action:', err);
+        } finally {
+            setIsProcessing(false);
+            closeModal();
+        }
+    };
+
+    const getSelectedAppointment = () => {
+        if (!appointmentId) return null;
+        return appointments.find(apt => apt.id === parseInt(appointmentId));
     };
 
     if (loading) {
@@ -284,13 +352,13 @@ export default function MyAppointments() {
                                             {appointment.status === 'pending' && (
                                                 <div className="mb-4 flex items-center">
                                                     <button
-                                                        onClick={() => navigate(`?action=reschedule/id=${appointment.id}`)}
+                                                        onClick={() => navigate(`?action=reschedule&id=${appointment.id}`)}
                                                         className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition-colors-transform duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg text-sm"
                                                     >
                                                         Reschedule
                                                     </button>
                                                     <button
-                                                        onClick={() => navigate(`?action=cancel/id=${appointment.id}`)}
+                                                        onClick={() => navigate(`?action=cancel&id=${appointment.id}`)}
                                                         className="ml-3 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors-transform duration-300 ease-out text-sm hover:-translate-y-0.5 hover:shadow-lg"
                                                     >
                                                         Cancel
@@ -342,6 +410,69 @@ export default function MyAppointments() {
                     </div>
                 </div>
             </div>
+
+            {/* Custom Confirmation Modal */}
+            {action && appointmentId && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+                        <div className="p-6">
+                            <div className="flex items-center mb-4">
+                                {action === 'cancel' ? (
+                                    <FaTimesCircle className="text-red-500 text-2xl mr-3" />
+                                ) : (
+                                    <FaClock className="text-yellow-500 text-2xl mr-3" />
+                                )}
+                                <h3 className="text-lg font-semibold text-gray-900">
+                                    {action === 'cancel' ? 'Cancel Appointment' : 'Reschedule Appointment'}
+                                </h3>
+                            </div>
+                            
+                            {getSelectedAppointment() && (
+                                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                                    <p className="text-sm text-gray-600 mb-2">
+                                        <strong>Date:</strong> {formatDate(getSelectedAppointment()!.appointment_date)}
+                                    </p>
+                                    <p className="text-sm text-gray-600 mb-2">
+                                        <strong>Time:</strong> {formatTime(getSelectedAppointment()!.appointment_time)}
+                                    </p>
+                                    <p className="text-sm text-gray-600">
+                                        <strong>Pets:</strong> {getSelectedAppointment()!.pets.length} pet(s)
+                                    </p>
+                                </div>
+                            )}
+
+                            <p className="text-gray-600 mb-6">
+                                {action === 'cancel' 
+                                    ? 'Are you sure you want to cancel this appointment? This action cannot be undone.'
+                                    : 'You will be redirected to the appointment booking page where you can select a new date and time.'
+                                }
+                            </p>
+
+                            <div className="flex gap-3 justify-end">
+                                <button
+                                    onClick={closeModal}
+                                    disabled={isProcessing}
+                                    className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors disabled:opacity-50"
+                                >
+                                    No, Keep It
+                                </button>
+                                <button
+                                    onClick={handleConfirmAction}
+                                    disabled={isProcessing}
+                                    className={`px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 ${
+                                        action === 'cancel'
+                                            ? 'bg-red-500 hover:bg-red-600 text-white'
+                                            : 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                    }`}
+                                >
+                                    {isProcessing && <FaSpinner className="animate-spin" />}
+                                    {action === 'cancel' ? 'Yes, Cancel' : 'Yes, Reschedule'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 }
