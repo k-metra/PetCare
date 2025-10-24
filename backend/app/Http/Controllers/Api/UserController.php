@@ -78,6 +78,7 @@ class UserController extends Controller
             return redirect('http://localhost:3000/email/verified?status=invalid_link');
         }
 
+
         if ($user->hasVerifiedEmail()) {
             return redirect('http://localhost:3000/email/verified?status=already_verified');
         }
