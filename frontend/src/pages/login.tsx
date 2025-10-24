@@ -60,6 +60,9 @@ export default function Login() {
                 case 'set-appointment':
                     navigate('/set-appointment');
                     break;
+                case 'my-appointments':
+                    navigate('/my-appointments');
+                    break;
                 default:
                     navigate('/home');
                     break;
