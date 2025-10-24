@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { DayPicker } from 'react-day-picker';
+import 'react-day-picker/dist/style.css';
 import Header from '../components/header';
+import { useNotification } from '../contexts/notificationContext';
 import { 
     FaCalendarAlt, 
     FaClock, 
@@ -36,16 +39,39 @@ interface Appointment {
 }
 
 export default function MyAppointments() {
+    const { showNotification } = useNotification();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
+    
+    // Reschedule modal state
+    const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+    const [rescheduleAppointmentId, setRescheduleAppointmentId] = useState<number | null>(null);
+    const [newSelectedDate, setNewSelectedDate] = useState<Date | undefined>(undefined);
+    const [newSelectedTime, setNewSelectedTime] = useState<string>('');
 
     const params = new URLSearchParams(window.location.search);
     const action = params.get('action');
     const appointmentId = params.get('id');
 
     const navigate = useNavigate();
+
+    // Available time slots from 8 AM to 3 PM (same as set-appointment page)
+    const timeSlots = [
+        '8:00 AM', '8:30 AM', '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM',
+        '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM',
+        '2:00 PM', '2:30 PM', '3:00 PM'
+    ];
+
+    // Disable Sundays and past dates (including today)
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const disabledDays = [
+        { before: tomorrow }, // Past dates and today
+        { dayOfWeek: [0] } // Sundays (0 = Sunday)
+    ];
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -149,6 +175,85 @@ export default function MyAppointments() {
         navigate('/my-appointments', { replace: true });
     };
 
+    const handleRescheduleClick = (appointmentId: number) => {
+        setRescheduleAppointmentId(appointmentId);
+        setNewSelectedDate(undefined);
+        setNewSelectedTime('');
+        setShowRescheduleModal(true);
+    };
+
+    const closeRescheduleModal = () => {
+        setShowRescheduleModal(false);
+        setRescheduleAppointmentId(null);
+        setNewSelectedDate(undefined);
+        setNewSelectedTime('');
+    };
+
+    const convertTo24Hour = (time12h: string): string => {
+        const [time, modifier] = time12h.split(' ');
+        let [hours, minutes] = time.split(':');
+        if (hours === '12') {
+            hours = '00';
+        }
+        if (modifier === 'PM') {
+            hours = String(parseInt(hours, 10) + 12);
+        }
+        return `${hours}:${minutes}`;
+    };
+
+    const handleRescheduleSubmit = async () => {
+        if (!newSelectedDate || !newSelectedTime || !rescheduleAppointmentId) {
+            showNotification('Please select both a date and time for the new appointment.', 'error');
+            return;
+        }
+
+        setIsProcessing(true);
+        try {
+            const token = localStorage.getItem('token');
+            const time24h = convertTo24Hour(newSelectedTime);
+            
+            const response = await fetch(`http://127.0.0.1:8000/api/appointments/${rescheduleAppointmentId}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    appointment_date: newSelectedDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
+                    appointment_time: time24h
+                })
+            });
+
+            const data = await response.json();
+            
+            if (data.status) {
+                // Update local state
+                setAppointments(prev => 
+                    prev.map(apt => 
+                        apt.id === rescheduleAppointmentId 
+                            ? { 
+                                ...apt, 
+                                appointment_date: newSelectedDate.toISOString().split('T')[0],
+                                appointment_time: time24h
+                              }
+                            : apt
+                    )
+                );
+                setError('');
+                closeRescheduleModal();
+                showNotification('Appointment rescheduled successfully! 🎉', 'success');
+            } else {
+                showNotification(data.message || 'Failed to reschedule appointment. Please try again.', 'error');
+            }
+        } catch (err) {
+            showNotification('Network error. Please try again.', 'error');
+            console.error('Error rescheduling appointment:', err);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     const handleConfirmAction = async () => {
         if (!action || !appointmentId) return;
 
@@ -182,10 +287,6 @@ export default function MyAppointments() {
                 } else {
                     setError('Failed to cancel appointment. Please try again.');
                 }
-            } else if (action === 'reschedule') {
-                // For reschedule, redirect to appointment booking with existing data
-                navigate(`/set-appointment?reschedule=${appointmentId}`);
-                return;
             }
         } catch (err) {
             setError('Network error. Please try again.');
@@ -352,7 +453,7 @@ export default function MyAppointments() {
                                             {appointment.status === 'pending' && (
                                                 <div className="mb-4 flex items-center">
                                                     <button
-                                                        onClick={() => navigate(`?action=reschedule&id=${appointment.id}`)}
+                                                        onClick={() => handleRescheduleClick(appointment.id)}
                                                         className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition-colors-transform duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg text-sm"
                                                     >
                                                         Reschedule
@@ -411,19 +512,15 @@ export default function MyAppointments() {
                 </div>
             </div>
 
-            {/* Custom Confirmation Modal */}
-            {action && appointmentId && (
+            {/* Custom Confirmation Modal for Cancel */}
+            {action === 'cancel' && appointmentId && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
                         <div className="p-6">
                             <div className="flex items-center mb-4">
-                                {action === 'cancel' ? (
-                                    <FaTimesCircle className="text-red-500 text-2xl mr-3" />
-                                ) : (
-                                    <FaClock className="text-yellow-500 text-2xl mr-3" />
-                                )}
+                                <FaTimesCircle className="text-red-500 text-2xl mr-3" />
                                 <h3 className="text-lg font-semibold text-gray-900">
-                                    {action === 'cancel' ? 'Cancel Appointment' : 'Reschedule Appointment'}
+                                    Cancel Appointment
                                 </h3>
                             </div>
                             
@@ -442,10 +539,7 @@ export default function MyAppointments() {
                             )}
 
                             <p className="text-gray-600 mb-6">
-                                {action === 'cancel' 
-                                    ? 'Are you sure you want to cancel this appointment? This action cannot be undone.'
-                                    : 'You will be redirected to the appointment booking page where you can select a new date and time.'
-                                }
+                                Are you sure you want to cancel this appointment? This action cannot be undone.
                             </p>
 
                             <div className="flex gap-3 justify-end">
@@ -459,14 +553,127 @@ export default function MyAppointments() {
                                 <button
                                     onClick={handleConfirmAction}
                                     disabled={isProcessing}
-                                    className={`px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 ${
-                                        action === 'cancel'
-                                            ? 'bg-red-500 hover:bg-red-600 text-white'
-                                            : 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                                    }`}
+                                    className="px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white"
                                 >
                                     {isProcessing && <FaSpinner className="animate-spin" />}
-                                    {action === 'cancel' ? 'Yes, Cancel' : 'Yes, Reschedule'}
+                                    Yes, Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Reschedule Modal */}
+            {showRescheduleModal && rescheduleAppointmentId && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center">
+                                    <FaClock className="text-yellow-500 text-2xl mr-3" />
+                                    <h3 className="text-lg font-semibold text-gray-900">
+                                        Reschedule Appointment
+                                    </h3>
+                                </div>
+                                <button
+                                    onClick={closeRescheduleModal}
+                                    disabled={isProcessing}
+                                    className="text-gray-400 hover:text-gray-600 text-2xl disabled:opacity-50"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            
+                            {appointments.find(apt => apt.id === rescheduleAppointmentId) && (
+                                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Current Appointment:</h4>
+                                    <p className="text-sm text-gray-600 mb-1">
+                                        <strong>Date:</strong> {formatDate(appointments.find(apt => apt.id === rescheduleAppointmentId)!.appointment_date)}
+                                    </p>
+                                    <p className="text-sm text-gray-600 mb-1">
+                                        <strong>Time:</strong> {formatTime(appointments.find(apt => apt.id === rescheduleAppointmentId)!.appointment_time)}
+                                    </p>
+                                    <p className="text-sm text-gray-600">
+                                        <strong>Pets:</strong> {appointments.find(apt => apt.id === rescheduleAppointmentId)!.pets.length} pet(s)
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Date Selection */}
+                            <div className="mb-6">
+                                <h4 className="text-md font-semibold text-gray-800 mb-3">Select New Date</h4>
+                                <p className="text-sm text-gray-600 mb-3">
+                                    Appointments must be scheduled at least 1 day in advance. Same-day appointments are not available.
+                                </p>
+                                <div className="bg-gray-50 p-4 rounded-lg">
+                                    <DayPicker
+                                        mode="single"
+                                        selected={newSelectedDate}
+                                        onSelect={setNewSelectedDate}
+                                        disabled={disabledDays}
+                                        className="rdp-custom"
+                                        modifiersStyles={{
+                                            selected: { backgroundColor: '#0d9488', color: 'white' }
+                                        }}
+                                    />
+                                    {newSelectedDate && (
+                                        <p className="mt-3 text-sm text-gray-600">
+                                            <strong>Selected Date:</strong> {newSelectedDate.toLocaleDateString('en-US', {
+                                                weekday: 'long',
+                                                year: 'numeric',
+                                                month: 'long',
+                                                day: 'numeric'
+                                            })}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Time Selection */}
+                            <div className="mb-6">
+                                <h4 className="text-md font-semibold text-gray-800 mb-3">Select New Time</h4>
+                                <p className="text-sm text-gray-600 mb-3">Clinic hours: 8:00 AM - 5:00 PM (Appointments available until 3:00 PM)</p>
+                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                                    {timeSlots.map((time) => (
+                                        <button
+                                            key={time}
+                                            type="button"
+                                            onClick={() => setNewSelectedTime(time)}
+                                            disabled={isProcessing}
+                                            className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors disabled:opacity-50 ${
+                                                newSelectedTime === time
+                                                    ? 'bg-teal-600 text-white border-teal-600'
+                                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            {time}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {error && (
+                                <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded text-sm">
+                                    {error}
+                                </div>
+                            )}
+
+                            <div className="flex gap-3 justify-end">
+                                <button
+                                    onClick={closeRescheduleModal}
+                                    disabled={isProcessing}
+                                    className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleRescheduleSubmit}
+                                    disabled={isProcessing || !newSelectedDate || !newSelectedTime}
+                                    className="px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white"
+                                >
+                                    {isProcessing && <FaSpinner className="animate-spin" />}
+                                    {isProcessing ? 'Rescheduling...' : 'Confirm Reschedule'}
                                 </button>
                             </div>
                         </div>
