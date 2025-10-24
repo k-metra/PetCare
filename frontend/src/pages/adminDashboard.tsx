@@ -873,7 +873,7 @@ const AdminDashboard: React.FC = () => {
 
           {/* Quick Stats */}
           {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Today's Appointments</h3>
                 <p className="text-3xl font-bold text-teal-600">{stats.today_appointments}</p>
@@ -887,6 +887,11 @@ const AdminDashboard: React.FC = () => {
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Staff Members</h3>
                 <p className="text-3xl font-bold text-purple-600">{stats.total_staff}</p>
+              </div>
+
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Canceled Appointments</h3>
+                <p className="text-3xl font-bold text-red-600">{stats.cancelled_appointments}</p>
               </div>
             </div>
           )}
