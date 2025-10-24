@@ -141,13 +141,72 @@ class AppointmentController extends Controller
             return response()->json([
                 'status' => true,
                 'services' => $services
-            ], 200);
+            ], 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         } catch (\Exception $e) {
             return response()->json([
                 'status' => false,
                 'message' => 'Failed to retrieve services',
                 'error' => $e->getMessage()
-            ], 500);
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        }
+    }
+
+    /**
+     * Cancel user's own appointment (only pending appointments)
+     */
+    public function cancel(Request $request, $id)
+    {
+        try {
+            // Find the appointment that belongs to the authenticated user
+            $appointment = $request->user()->appointments()->findOrFail($id);
+            
+            // Only allow cancellation of pending appointments
+            if ($appointment->status !== 'pending') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Only pending appointments can be cancelled'
+                ], 400)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+            }
+
+            // Update appointment status to cancelled
+            $appointment->update(['status' => 'cancelled']);
+            $appointment->load(['pets', 'services']);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Appointment cancelled successfully',
+                'appointment' => $appointment
+            ], 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Appointment not found or does not belong to you'
+            ], 404)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to cancel appointment',
+                'error' => $e->getMessage()
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
         }
     }
 }
