@@ -158,6 +158,92 @@ class AppointmentController extends Controller
     }
 
     /**
+     * Update (reschedule) user's own appointment
+     */
+    public function update(Request $request, $id)
+    {
+        try {
+            // Find the appointment that belongs to the authenticated user
+            $appointment = $request->user()->appointments()->findOrFail($id);
+            
+            // Only allow rescheduling of pending appointments
+            if ($appointment->status !== 'pending') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Only pending appointments can be rescheduled'
+                ], 400)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+            }
+
+            // Validate the request
+            $validator = Validator::make($request->all(), [
+                'appointment_date' => 'required|date|after:today',
+                'appointment_time' => 'required|string',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+            }
+
+            // Check if the selected date is not Sunday
+            $selectedDate = new \DateTime($request->appointment_date);
+            if ($selectedDate->format('w') == 0) { // 0 = Sunday
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Appointments cannot be scheduled on Sundays'
+                ], 422)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+            }
+
+            // Update appointment
+            $appointment->update([
+                'appointment_date' => $request->appointment_date,
+                'appointment_time' => $request->appointment_time,
+            ]);
+            
+            $appointment->load(['pets', 'services']);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Appointment rescheduled successfully',
+                'appointment' => $appointment
+            ], 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Appointment not found or does not belong to you'
+            ], 404)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to reschedule appointment',
+                'error' => $e->getMessage()
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        }
+    }
+
+    /**
      * Cancel user's own appointment (only pending appointments)
      */
     public function cancel(Request $request, $id)
