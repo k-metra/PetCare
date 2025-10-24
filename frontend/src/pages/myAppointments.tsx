@@ -266,19 +266,39 @@ export default function MyAppointments() {
                                         </div>
 
                                         {/* Services Section */}
-                                        <div className="mb-4">
-                                            <h4 className="text-sm font-semibold text-gray-700 mb-2">Services:</h4>
-                                            <div className="flex flex-wrap gap-2">
-                                                {appointment.services.map((service) => (
-                                                    <span
-                                                        key={service.id}
-                                                        className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
-                                                    >
+                                        <div className="flex flex-row justify-between">
+                                            <div className="mb-4">
+                                                <h4 className="text-sm font-semibold text-gray-700 mb-2">Services:</h4>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {appointment.services.map((service) => (
+                                                        <span
+                                                            key={service.id}
+                                                            className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
+                                                        >
                                                         {service.name}
-                                                    </span>
-                                                ))}
+                                                        </span>
+                                                    ))}
+                                                </div>
                                             </div>
+
+                                            {appointment.status === 'pending' && (
+                                                <div className="mb-4 flex items-center">
+                                                    <button
+                                                        onClick={() => navigate(`?action=reschedule/id=${appointment.id}`)}
+                                                        className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition-colors-transform duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg text-sm"
+                                                    >
+                                                        Reschedule
+                                                    </button>
+                                                    <button
+                                                        onClick={() => navigate(`?action=cancel/id=${appointment.id}`)}
+                                                        className="ml-3 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors-transform duration-300 ease-out text-sm hover:-translate-y-0.5 hover:shadow-lg"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
+                                        
 
                                         {/* Notes Section */}
                                         {appointment.notes && (
