@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { useNavigate } from 'react-router-dom';
+import { apiUrl } from '../utils/apiConfig';
 import Header from '../components/header';
 import { useNotification } from '../contexts/notificationContext';
 
@@ -391,7 +392,7 @@ const SetAppointment: React.FC = () => {
         notes: '' // You can add notes field to the form if needed
       };
 
-      const response = await fetch('http://127.0.0.1:8000/api/appointments', {
+      const response = await fetch(apiUrl.appointments(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

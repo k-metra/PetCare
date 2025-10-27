@@ -1,4 +1,6 @@
 // Logout utility functions
+import { apiUrl } from './apiConfig';
+
 export const logout = async () => {
   try {
     const token = localStorage.getItem('token');
@@ -10,7 +12,7 @@ export const logout = async () => {
     }
 
     // Call logout API
-    const response = await fetch('http://127.0.0.1:8000/api/logout', {
+    const response = await fetch(apiUrl.logout(), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -49,7 +51,7 @@ export const logoutAll = async () => {
       return { success: true, message: 'Already logged out' };
     }
 
-    const response = await fetch('http://127.0.0.1:8000/api/logout-all', {
+    const response = await fetch(apiUrl.logoutAll(), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

@@ -1,5 +1,6 @@
 import Header from '../components/header'
 import InputField from '../components/inputField'
+import { apiUrl } from '../utils/apiConfig'
 
 import home_image from '../assets/home/home_image.png'
 
@@ -23,7 +24,7 @@ export default function Register() {
         setLoading(true);
         // Handle login logic here
 
-        await fetch('http://127.0.0.1:8000/api/register', {
+        await fetch(apiUrl.register(), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

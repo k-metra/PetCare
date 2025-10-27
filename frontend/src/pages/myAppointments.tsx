@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
+import { apiUrl } from '../utils/apiConfig';
 import Header from '../components/header';
 import { useNotification } from '../contexts/notificationContext';
 import { 
@@ -94,7 +95,7 @@ export default function MyAppointments() {
             setLoading(true);
             const token = localStorage.getItem('token');
             
-            const response = await fetch('http://127.0.0.1:8000/api/appointments', {
+            const response = await fetch(apiUrl.appointments(), {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Accept': 'application/json'
@@ -212,7 +213,7 @@ export default function MyAppointments() {
             const token = localStorage.getItem('token');
             const time24h = convertTo24Hour(newSelectedTime);
             
-            const response = await fetch(`http://127.0.0.1:8000/api/appointments/${rescheduleAppointmentId}`, {
+            const response = await fetch(apiUrl.appointment(rescheduleAppointmentId), {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -263,7 +264,7 @@ export default function MyAppointments() {
             
             if (action === 'cancel') {
                 // Handle appointment cancellation
-                const response = await fetch(`http://127.0.0.1:8000/api/appointments/${appointmentId}/cancel`, {
+                const response = await fetch(apiUrl.cancelAppointment(parseInt(appointmentId)), {
                     method: 'PUT',
                     headers: {
                         'Authorization': `Bearer ${token}`,

@@ -19,7 +19,13 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    'allowed_origins' => array_filter([
+        env('FRONTEND_URL', 'http://localhost:3000'),
+        'https://pet-care-pink-six.vercel.app', 
+        'https://pet-care-pwi29pk2b-k-metras-projects.vercel.app',
+        'http://localhost:3000',
+        'http://127.0.0.1:3000'
+    ]),
 
     'allowed_origins_patterns' => [],
 
@@ -27,8 +33,8 @@ return [
 
     'exposed_headers' => [],
 
-    'max_age' => 0,
+    'max_age' => 86400,
 
-    'supports_credentials' => false,
+    'supports_credentials' => true,
 
 ];

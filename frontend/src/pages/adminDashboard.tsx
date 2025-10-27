@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiUrl } from '../utils/apiConfig';
 import Header from '../components/header';
 import { 
   FaCalendarAlt, 
@@ -199,7 +200,7 @@ const AdminDashboard: React.FC = () => {
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/admin/dashboard', {
+      const response = await fetch(apiUrl.adminDashboard(), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'
@@ -220,7 +221,7 @@ const AdminDashboard: React.FC = () => {
   const fetchAppointments = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/admin/appointments', {
+      const response = await fetch(apiUrl.adminAppointments(), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'
@@ -255,7 +256,7 @@ const AdminDashboard: React.FC = () => {
     setUpdatingStatus(appointmentId);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://127.0.0.1:8000/api/admin/appointments/${appointmentId}/status`, {
+      const response = await fetch(apiUrl.appointmentStatus(appointmentId), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -302,7 +303,7 @@ const AdminDashboard: React.FC = () => {
     if (appointment.status === 'completed') {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`http://127.0.0.1:8000/api/medical-records?appointment_id=${appointment.id}`, {
+        const response = await fetch(apiUrl.medicalRecordsByAppointment(appointment.id), {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json'
@@ -342,7 +343,7 @@ const AdminDashboard: React.FC = () => {
     setUpdatingStatus(appointmentId);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://127.0.0.1:8000/api/admin/appointments/${appointmentId}`, {
+      const response = await fetch(apiUrl.deleteAppointment(appointmentId), {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -496,7 +497,7 @@ const AdminDashboard: React.FC = () => {
       // If there's no medical data, skip saving medical records and just mark completed
       const token = localStorage.getItem('token');
       if (!hasMedicalData) {
-        const statusResponse = await fetch(`http://127.0.0.1:8000/api/admin/appointments/${appointmentToComplete.id}/status`, {
+        const statusResponse = await fetch(apiUrl.appointmentStatus(appointmentToComplete.id), {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -526,7 +527,7 @@ const AdminDashboard: React.FC = () => {
         }
       } else {
         // Save medical records when medical data exists
-        const response = await fetch('http://127.0.0.1:8000/api/medical-records', {
+        const response = await fetch(apiUrl.medicalRecords(), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -543,7 +544,7 @@ const AdminDashboard: React.FC = () => {
 
         if (response.ok) {
           // Update appointment status to completed
-          const statusResponse = await fetch(`http://127.0.0.1:8000/api/admin/appointments/${appointmentToComplete.id}/status`, {
+          const statusResponse = await fetch(apiUrl.appointmentStatus(appointmentToComplete.id), {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -593,7 +594,7 @@ const AdminDashboard: React.FC = () => {
   const fetchPetRecords = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/medical-records', {
+      const response = await fetch(apiUrl.medicalRecords(), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'
@@ -612,7 +613,7 @@ const AdminDashboard: React.FC = () => {
   const fetchAnalyticsData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/admin/analytics', {
+      const response = await fetch(apiUrl.adminAnalytics(), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'
@@ -656,7 +657,7 @@ const AdminDashboard: React.FC = () => {
   const fetchRecentRecords = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/api/admin/recent-appointments', {
+      const response = await fetch(apiUrl.adminRecentAppointments(), {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Accept': 'application/json'

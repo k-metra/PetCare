@@ -1,5 +1,6 @@
 import Header from '../components/header'
 import InputField from '../components/inputField'
+import { apiUrl } from '../utils/apiConfig'
 
 import home_image from '../assets/home/home_image.png'
 
@@ -35,7 +36,7 @@ export default function Login() {
         // Handle login logic here
         console.log('Logging in with credentials:', credentials);
 
-        const response = await fetch('http://127.0.0.1:8000/api/login', {
+        const response = await fetch(apiUrl.login(), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
