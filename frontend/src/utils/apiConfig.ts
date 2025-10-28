@@ -13,6 +13,9 @@ export const apiUrl = {
   register: () => getApiUrl('api/register'),
   logout: () => getApiUrl('api/logout'),
   logoutAll: () => getApiUrl('api/logout-all'),
+  resendVerification: () => getApiUrl('api/email/resend-verification'),
+  forgotPassword: () => getApiUrl('api/forgot-password'),
+  resetPassword: () => getApiUrl('api/reset-password'),
   
   // Appointments
   appointments: () => getApiUrl('api/appointments'),
@@ -20,6 +23,7 @@ export const apiUrl = {
   cancelAppointment: (id: number) => getApiUrl(`api/appointments/${id}/cancel`),
   adminAppointments: () => getApiUrl('api/admin/appointments'),
   appointmentStatus: (id: number) => getApiUrl(`api/admin/appointments/${id}/status`),
+  rescheduleAppointment: (id: number) => getApiUrl(`api/admin/appointments/${id}/reschedule`),
   deleteAppointment: (id: number) => getApiUrl(`api/admin/appointments/${id}`),
   
   // Medical Records
@@ -30,6 +34,8 @@ export const apiUrl = {
   adminDashboard: () => getApiUrl('api/admin/dashboard'),
   adminAnalytics: () => getApiUrl('api/admin/analytics'),
   adminRecentAppointments: () => getApiUrl('api/admin/recent-appointments'),
+  adminWalkInAppointments: () => getApiUrl('api/admin/walk-in-appointments'),
+  adminCustomers: () => getApiUrl('api/admin/customers'),
 };
 
 export default API_BASE_URL;
