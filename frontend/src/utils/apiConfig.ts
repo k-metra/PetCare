@@ -17,6 +17,10 @@ export const apiUrl = {
   forgotPassword: () => getApiUrl('api/forgot-password'),
   resetPassword: () => getApiUrl('api/reset-password'),
   
+  // Account Settings
+  updateProfile: () => getApiUrl('api/profile'),
+  changePassword: () => getApiUrl('api/change-password'),
+  
   // Appointments
   appointments: () => getApiUrl('api/appointments'),
   appointment: (id: number) => getApiUrl(`api/appointments/${id}`),
@@ -25,6 +29,7 @@ export const apiUrl = {
   appointmentStatus: (id: number) => getApiUrl(`api/admin/appointments/${id}/status`),
   rescheduleAppointment: (id: number) => getApiUrl(`api/admin/appointments/${id}/reschedule`),
   deleteAppointment: (id: number) => getApiUrl(`api/admin/appointments/${id}`),
+  completeAppointment: () => getApiUrl('api/admin/appointments/complete'),
   
   // Medical Records
   medicalRecords: () => getApiUrl('api/medical-records'),
@@ -41,6 +46,13 @@ export const apiUrl = {
   adminNotifications: () => getApiUrl('api/admin/notifications'),
   adminNotificationsStream: () => getApiUrl('api/admin/notifications/stream'),
   adminNotificationsClear: () => getApiUrl('api/admin/notifications'),
+  
+  // Inventory Management
+  categories: () => getApiUrl('api/categories'),
+  category: (id: number) => getApiUrl(`api/categories/${id}`),
+  products: () => getApiUrl('api/products'),
+  product: (id: number) => getApiUrl(`api/products/${id}`),
+  productQuantity: (id: number) => getApiUrl(`api/products/${id}/quantity`),
 };
 
 export default API_BASE_URL;
