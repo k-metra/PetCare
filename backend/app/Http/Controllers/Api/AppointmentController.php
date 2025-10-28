@@ -8,6 +8,9 @@ use App\Models\Service;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\AppointmentCancelled;
+use App\Mail\AppointmentRescheduled;
 
 class AppointmentController extends Controller
 {
@@ -31,6 +34,13 @@ class AppointmentController extends Controller
                 'pets.*.groomingDetails.*.*.size' => 'required|string',
                 'pets.*.groomingDetails.*.*.price' => 'required|numeric',
                 'pets.*.groomingDetails.*.*.package' => 'required|string',
+                'pets.*.dentalCareDetails' => 'nullable|array',
+                'pets.*.dentalCareDetails.procedure' => 'required_with:pets.*.dentalCareDetails|string',
+                'pets.*.dentalCareDetails.size' => 'required_with:pets.*.dentalCareDetails|string',
+                'pets.*.dentalCareDetails.procedurePrice' => 'required_with:pets.*.dentalCareDetails|numeric',
+                'pets.*.dentalCareDetails.anesthetic' => 'required_with:pets.*.dentalCareDetails|string',
+                'pets.*.dentalCareDetails.anestheticPrice' => 'required_with:pets.*.dentalCareDetails|numeric',
+                'pets.*.dentalCareDetails.totalPrice' => 'required_with:pets.*.dentalCareDetails|numeric',
                 'services' => 'required|array|min:1',
                 'services.*' => 'required|string',
                 'notes' => 'nullable|string'
@@ -71,7 +81,8 @@ class AppointmentController extends Controller
                     'type' => $petData['type'],
                     'breed' => $petData['breed'],
                     'name' => $petData['name'],
-                    'grooming_details' => $petData['groomingDetails'] ?? null
+                    'grooming_details' => $petData['groomingDetails'] ?? null,
+                    'dental_care_details' => $petData['dentalCareDetails'] ?? null
                 ]);
             }
 
@@ -84,9 +95,23 @@ class AppointmentController extends Controller
             $appointment->services()->attach($serviceIds);
 
             // Load relationships for response
-            $appointment->load(['pets', 'services']);
+            $appointment->load(['pets', 'services', 'user']);
 
             DB::commit();
+
+            // Trigger notification for admin/staff
+            \App\Http\Controllers\Api\NotificationController::triggerNotification(
+                'new_appointment',
+                "New appointment booked by {$appointment->user->name}",
+                [
+                    'appointment_id' => $appointment->id,
+                    'customer_name' => $appointment->user->name,
+                    'appointment_date' => \Carbon\Carbon::parse($appointment->appointment_date)->format('M j, Y'),
+                    'appointment_time' => $appointment->appointment_time,
+                    'pets_count' => $appointment->pets->count(),
+                    'services' => $appointment->services->pluck('name')->toArray()
+                ]
+            );
 
             return response()->json([
                 'status' => true,
@@ -281,7 +306,21 @@ class AppointmentController extends Controller
 
             // Update appointment status to cancelled
             $appointment->update(['status' => 'cancelled']);
-            $appointment->load(['pets', 'services']);
+            $appointment->load(['pets', 'services', 'user']);
+
+            // Trigger notification for admin/staff
+            \App\Http\Controllers\Api\NotificationController::triggerNotification(
+                'appointment_cancelled',
+                "Appointment cancelled by {$appointment->user->name}",
+                [
+                    'appointment_id' => $appointment->id,
+                    'customer_name' => $appointment->user->name,
+                    'appointment_date' => \Carbon\Carbon::parse($appointment->appointment_date)->format('M j, Y'),
+                    'appointment_time' => $appointment->appointment_time,
+                    'pets_count' => $appointment->pets->count(),
+                    'services' => $appointment->services->pluck('name')->toArray()
+                ]
+            );
 
             return response()->json([
                 'status' => true,
