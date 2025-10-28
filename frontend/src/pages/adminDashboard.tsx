@@ -163,13 +163,144 @@ const AdminDashboard: React.FC = () => {
   const [showMedicalModal, setShowMedicalModal] = useState(false);
   const [appointmentToComplete, setAppointmentToComplete] = useState<Appointment | null>(null);
   const [medicalExam, setMedicalExam] = useState<MedicalExamination | null>(null);
-  const [activeTab, setActiveTab] = useState<'appointments' | 'petRecords' | 'analytics'>('appointments');
+  const [activeTab, setActiveTab] = useState<'appointments' | 'walkIn' | 'customers' | 'petRecords' | 'analytics'>('appointments');
   const [petRecords, setPetRecords] = useState<any[]>([]);
   const [recordsSearchTerm, setRecordsSearchTerm] = useState('');
   const [selectedPetRecord, setSelectedPetRecord] = useState<any | null>(null);
   const [showPetRecordModal, setShowPetRecordModal] = useState(false);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [recentRecords, setRecentRecords] = useState<Appointment[]>([]);
+
+  // Walk-in appointment state
+  const [walkInLoading, setWalkInLoading] = useState(false);
+  const [walkInData, setWalkInData] = useState({
+    customerName: '',
+    customerEmail: '',
+    selectedDate: undefined as Date | undefined,
+    selectedTime: '',
+    pets: [] as any[],
+    services: [] as string[]
+  });
+  const [walkInPetCount, setWalkInPetCount] = useState(1);
+  const [showWalkInGroomingModal, setShowWalkInGroomingModal] = useState(false);
+  const [currentWalkInPetForGrooming, setCurrentWalkInPetForGrooming] = useState<number | null>(null);
+
+  // Reschedule appointment state
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [rescheduleAppointmentId, setRescheduleAppointmentId] = useState<number | null>(null);
+  const [newSelectedDate, setNewSelectedDate] = useState<Date | undefined>(undefined);
+  const [newSelectedTime, setNewSelectedTime] = useState('');
+  const [isRescheduling, setIsRescheduling] = useState(false);
+
+  // Customers tab state
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [expandedCustomer, setExpandedCustomer] = useState<number | null>(null);
+  const [expandedPet, setExpandedPet] = useState<string | null>(null);
+  
+  // Customer search and filter state
+  const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+  const [customerFilterType, setCustomerFilterType] = useState<'all' | 'name' | 'email' | 'petName' | 'lastVisit'>('all');
+  const [verificationFilter, setVerificationFilter] = useState<'all' | 'verified' | 'unverified'>('all');
+
+  // Grooming packages and services data
+  const groomingPackages = {
+    'Regular Grooming (No Bathing) - Not Matted Hair': {
+      'X-Small': 450,
+      'Small': 500,
+      'Medium': 550,
+      'Large': 700,
+      'X-Large': 950
+    },
+    'Regular Grooming (No Bathing) - Matted Hair': {
+      'X-Small': 500,
+      'Small': 550,
+      'Medium': 600,
+      'Large': 800,
+      'X-Large': 1100
+    },
+    'Complete Grooming (with Bath, Ear Cleaning, Nail Clip & Anal Sac Draining) - Not Matted Hair': {
+      'X-Small': 500,
+      'Small': 550,
+      'Medium': 600,
+      'Large': 750,
+      'X-Large': 950
+    },
+    'Complete Grooming (with Bath, Ear Cleaning, Nail Clip & Anal Sac Draining) - Matted Hair': {
+      'X-Small': 550,
+      'Small': 600,
+      'Medium': 650,
+      'Large': 950,
+      'X-Large': 1200
+    },
+    'Regular Bath': {
+      'X-Small': 250,
+      'Small': 300,
+      'Medium': 350,
+      'Large': 500,
+      'X-Large': 600
+    },
+    'Sanitary Bath Package (No Haircut)': {
+      'X-Small': 450,
+      'Small': 550,
+      'Medium': 650,
+      'Large': 750,
+      'X-Large': 950
+    }
+  };
+
+  const individualServices = {
+    'Sanitary Grooming (No Bath)': {
+      'X-Small': 400,
+      'Small': 450,
+      'Medium': 500,
+      'Large': 550,
+      'X-Large': 650
+    },
+    'Facial Grooming': {
+      'X-Small': 400,
+      'Small': 450,
+      'Medium': 500,
+      'Large': 550,
+      'X-Large': 650
+    },
+    'Underbelly Grooming (Pre-Natal)': {
+      'X-Small': 50,
+      'Small': 100,
+      'Medium': 150,
+      'Large': 200,
+      'X-Large': 250
+    },
+    'Paw Grooming (Poodle Feet)': {
+      'X-Small': 150,
+      'Small': 200,
+      'Medium': 300,
+      'Large': 400,
+      'X-Large': 400
+    },
+    'Underbelly and Bot': {
+      'X-Small': 150,
+      'Small': 200,
+      'Medium': 300,
+      'Large': 400,
+      'X-Large': 400
+    },
+    'Nail Clip': {
+      'Small': 100,
+      'Medium': 150
+    },
+    'Ear Cleaning': {
+      'Small': 200,
+      'Medium': 300
+    },
+    'Anal Sac Draining': {
+      'Small': 200,
+      'Medium': 300
+    },
+    'Toothbrush (with personal toothbrush & toothpaste)': {
+      'Any Size': 150
+    }
+  };
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -195,7 +326,20 @@ const AdminDashboard: React.FC = () => {
     fetchPetRecords();
     fetchAnalyticsData();
     fetchRecentRecords();
+
+    // Initialize walk-in pets array
+    setWalkInData(prev => ({
+      ...prev,
+      pets: [{ id: 1, type: 'dog', breed: '', name: '' }]
+    }));
   }, []);
+
+  // Fetch customers when customers tab is accessed
+  useEffect(() => {
+    if (activeTab === 'customers') {
+      fetchCustomers();
+    }
+  }, [activeTab]);
 
   const fetchDashboardData = async () => {
     try {
@@ -239,6 +383,95 @@ const AdminDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchCustomers = async () => {
+    setCustomersLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(apiUrl.adminCustomers(), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (data.status) {
+        setCustomers(data.customers);
+      } else {
+        console.error('Failed to fetch customers:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+    } finally {
+      setCustomersLoading(false);
+    }
+  };
+
+  // Filter customers based on search criteria
+  const getFilteredCustomers = () => {
+    let filtered = customers;
+
+    // Apply verification filter
+    if (verificationFilter !== 'all') {
+      filtered = filtered.filter(customer => {
+        if (verificationFilter === 'verified') {
+          return customer.email_verified_at !== null;
+        } else {
+          return customer.email_verified_at === null;
+        }
+      });
+    }
+
+    // Apply search filter
+    if (customerSearchTerm.trim() !== '') {
+      const searchTerm = customerSearchTerm.toLowerCase().trim();
+      
+      filtered = filtered.filter(customer => {
+        switch (customerFilterType) {
+          case 'name':
+            return customer.name.toLowerCase().includes(searchTerm);
+          
+          case 'email':
+            return customer.email.toLowerCase().includes(searchTerm);
+          
+          case 'petName':
+            return customer.pets.some((pet: any) => 
+              pet.name && pet.name.toLowerCase().includes(searchTerm)
+            );
+          
+          case 'lastVisit':
+            if (customer.last_appointment) {
+              const lastVisitDate = new Date(customer.last_appointment).toLocaleDateString().toLowerCase();
+              return lastVisitDate.includes(searchTerm);
+            }
+            return false;
+          
+          case 'all':
+          default:
+            // Search across all fields
+            const nameMatch = customer.name.toLowerCase().includes(searchTerm);
+            const emailMatch = customer.email.toLowerCase().includes(searchTerm);
+            const petNameMatch = customer.pets.some((pet: any) => 
+              pet.name && pet.name.toLowerCase().includes(searchTerm)
+            );
+            const lastVisitMatch = customer.last_appointment && 
+              new Date(customer.last_appointment).toLocaleDateString().toLowerCase().includes(searchTerm);
+            
+            return nameMatch || emailMatch || petNameMatch || lastVisitMatch;
+        }
+      });
+    }
+
+    return filtered;
+  };
+
+  // Clear all filters
+  const clearCustomerFilters = () => {
+    setCustomerSearchTerm('');
+    setCustomerFilterType('all');
+    setVerificationFilter('all');
   };
 
   const updateAppointmentStatus = async (appointmentId: number, newStatus: string) => {
@@ -286,6 +519,263 @@ const AdminDashboard: React.FC = () => {
       alert('An error occurred while updating the appointment status');
     } finally {
       setUpdatingStatus(null);
+    }
+  };
+
+  const handleWalkInSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setWalkInLoading(true);
+
+    try {
+      // Validation
+      if (!walkInData.customerName.trim()) {
+        alert('Please enter customer name');
+        return;
+      }
+      
+      if (!walkInData.customerEmail.trim()) {
+        alert('Please enter customer email');
+        return;
+      }
+      
+      if (!walkInData.selectedDate) {
+        alert('Please select appointment date');
+        return;
+      }
+      
+      if (!walkInData.selectedTime) {
+        alert('Please select appointment time');
+        return;
+      }
+      
+      if (walkInData.services.length === 0) {
+        alert('Please select at least one service');
+        return;
+      }
+      
+      if (walkInData.pets.some(pet => !pet.name.trim() || !pet.breed)) {
+        alert('Please fill in all pet information');
+        return;
+      }
+      
+      if (walkInData.services.includes('Pet Grooming') && walkInData.pets.some(pet => !pet.groomingDetails)) {
+        alert('Please select grooming packages for all pets when Pet Grooming service is selected');
+        return;
+      }
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('Please login again');
+        return;
+      }
+
+      // Format data for API
+      const payload = {
+        customer_name: walkInData.customerName,
+        customer_email: walkInData.customerEmail,
+        appointment_date: walkInData.selectedDate.toISOString().split('T')[0],
+        appointment_time: walkInData.selectedTime,
+        pets: walkInData.pets.map(pet => {
+          let formattedGroomingDetails = null;
+          
+          // Transform grooming details to match backend expected structure
+          if (pet.groomingDetails) {
+            formattedGroomingDetails = {
+              [pet.groomingDetails.category]: [{
+                service: pet.groomingDetails.category,
+                size: pet.groomingDetails.size,
+                price: pet.groomingDetails.price,
+                package: pet.groomingDetails.isPackage ? 'Package' : 'Individual'
+              }]
+            };
+          }
+          
+          return {
+            type: pet.type,
+            breed: pet.breed,
+            name: pet.name,
+            groomingDetails: formattedGroomingDetails
+          };
+        }),
+        services: walkInData.services,
+        notes: `Walk-in appointment created by ${user?.name || 'staff'}`
+      };
+
+      const response = await fetch(apiUrl.adminWalkInAppointments(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (data.status) {
+        // Reset form
+        setWalkInData({
+          customerName: '',
+          customerEmail: '',
+          selectedDate: undefined,
+          selectedTime: '',
+          pets: [{ id: 1, type: 'dog', breed: '', name: '' }],
+          services: []
+        });
+        setWalkInPetCount(1);
+
+        // Show success message with warning if present
+        let message = 'Walk-in appointment created successfully!';
+        if (data.warning) {
+          message += '\n\n⚠️ ' + data.warning;
+        }
+        alert(message);
+        
+        // Refresh appointments and stats
+        await fetchAppointments();
+        await fetchDashboardData();
+      } else {
+        alert(data.message || 'Failed to create appointment');
+      }
+    } catch (error) {
+      console.error('Error creating walk-in appointment:', error);
+      alert('An error occurred while creating the appointment');
+    } finally {
+      setWalkInLoading(false);
+    }
+  };
+
+  // Reschedule appointment functions
+  const handleRescheduleClick = (appointmentId: number) => {
+    setRescheduleAppointmentId(appointmentId);
+    setNewSelectedDate(undefined);
+    setNewSelectedTime('');
+    setShowRescheduleModal(true);
+  };
+
+  const closeRescheduleModal = () => {
+    setShowRescheduleModal(false);
+    setRescheduleAppointmentId(null);
+    setNewSelectedDate(undefined);
+    setNewSelectedTime('');
+  };
+
+  const convertTo24Hour = (time12h: string): string => {
+    const [time, modifier] = time12h.split(' ');
+    let [hours, minutes] = time.split(':');
+    if (hours === '12') {
+      hours = '00';
+    }
+    if (modifier === 'PM') {
+      hours = String(parseInt(hours, 10) + 12);
+    }
+    return `${hours}:${minutes}`;
+  };
+
+  const handleRescheduleSubmit = async () => {
+    if (!newSelectedDate || !newSelectedTime || !rescheduleAppointmentId) {
+      alert('Please select both a date and time for the new appointment.');
+      return;
+    }
+
+    setIsRescheduling(true);
+    try {
+      const token = localStorage.getItem('token');
+      const time24h = convertTo24Hour(newSelectedTime);
+      
+      const response = await fetch(apiUrl.rescheduleAppointment(rescheduleAppointmentId), {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          appointment_date: newSelectedDate.toISOString().split('T')[0],
+          appointment_time: time24h
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.status) {
+        // Update local state
+        setAppointments(prev => 
+          prev.map(apt => 
+            apt.id === rescheduleAppointmentId 
+              ? { 
+                  ...apt, 
+                  appointment_date: newSelectedDate.toISOString().split('T')[0],
+                  appointment_time: time24h
+                }
+              : apt
+          )
+        );
+        
+        closeRescheduleModal();
+        alert('Appointment rescheduled successfully! 🎉');
+        
+        // Refresh appointments and stats
+        await fetchAppointments();
+        await fetchDashboardData();
+      } else {
+        alert(data.message || 'Failed to reschedule appointment. Please try again.');
+      }
+    } catch (err) {
+      alert('Network error. Please try again.');
+      console.error('Error rescheduling appointment:', err);
+    } finally {
+      setIsRescheduling(false);
+    }
+  };
+
+  const handleWalkInGroomingModalOpen = (petIndex: number) => {
+    setCurrentWalkInPetForGrooming(petIndex);
+    setShowWalkInGroomingModal(true);
+  };
+
+  const handleWalkInGroomingModalClose = () => {
+    setShowWalkInGroomingModal(false);
+    setCurrentWalkInPetForGrooming(null);
+  };
+
+  const updateWalkInPetGrooming = (petIndex: number, category: string, size: string, price: number, isPackage: boolean) => {
+    const updatedPets = [...walkInData.pets];
+    updatedPets[petIndex] = {
+      ...updatedPets[petIndex],
+      groomingDetails: { category, size, price, isPackage }
+    };
+    setWalkInData(prev => ({ ...prev, pets: updatedPets }));
+  };
+
+  const handleWalkInServiceToggle = (service: string) => {
+    const currentServices = walkInData.services;
+    
+    if (service === 'Pet Grooming') {
+      if (currentServices.includes(service)) {
+        // Remove grooming service and clear all pet grooming details
+        const updatedServices = currentServices.filter(s => s !== service);
+        const updatedPets = walkInData.pets.map(pet => ({
+          ...pet,
+          groomingDetails: undefined
+        }));
+        setWalkInData(prev => ({ 
+          ...prev, 
+          services: updatedServices,
+          pets: updatedPets
+        }));
+      } else {
+        // Add grooming service
+        const updatedServices = [...currentServices, service];
+        setWalkInData(prev => ({ ...prev, services: updatedServices }));
+      }
+    } else {
+      const updatedServices = currentServices.includes(service)
+        ? currentServices.filter(s => s !== service)
+        : [...currentServices, service];
+      
+      setWalkInData(prev => ({ ...prev, services: updatedServices }));
     }
   };
 
@@ -796,6 +1286,26 @@ const AdminDashboard: React.FC = () => {
                   Appointments
                 </button>
                 <button
+                  onClick={() => setActiveTab('walkIn')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'walkIn'
+                      ? 'border-teal-500 text-teal-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Walk-In
+                </button>
+                <button
+                  onClick={() => setActiveTab('customers')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'customers'
+                      ? 'border-teal-500 text-teal-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Customers
+                </button>
+                <button
                   onClick={() => setActiveTab('petRecords')}
                   className={`py-2 px-1 border-b-2 font-medium text-sm ${
                     activeTab === 'petRecords'
@@ -1055,6 +1565,574 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
         )}
+
+          {/* Walk-In Appointments */}
+          {activeTab === 'walkIn' && (
+            <div className="bg-white rounded-lg shadow">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Walk-In Appointment Registration
+                </h2>
+                <p className="text-gray-600 mt-1">Register walk-in customers and book appointments on their behalf</p>
+              </div>
+
+              <div className="p-6">
+                <form onSubmit={handleWalkInSubmit} className="space-y-8">
+                  {/* Customer Information */}
+                  <div className="bg-gray-50 p-6 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Customer Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Customer Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={walkInData.customerName}
+                          onChange={(e) => setWalkInData(prev => ({...prev, customerName: e.target.value}))}
+                          placeholder="Enter customer's full name"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Email Address *
+                        </label>
+                        <input
+                          type="email"
+                          value={walkInData.customerEmail}
+                          onChange={(e) => setWalkInData(prev => ({...prev, customerEmail: e.target.value}))}
+                          placeholder="customer@email.com"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Appointment Scheduling */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Appointment Details</h3>
+                    
+                    {/* Date and Time Selection */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Appointment Date *
+                        </label>
+                        <input
+                          type="date"
+                          value={walkInData.selectedDate ? walkInData.selectedDate.toISOString().split('T')[0] : ''}
+                          onChange={(e) => {
+                            const date = e.target.value ? new Date(e.target.value) : undefined;
+                            setWalkInData(prev => ({...prev, selectedDate: date}));
+                          }}
+                          min={new Date().toISOString().split('T')[0]}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Appointment Time *
+                        </label>
+                        <select
+                          value={walkInData.selectedTime}
+                          onChange={(e) => setWalkInData(prev => ({...prev, selectedTime: e.target.value}))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                          required
+                        >
+                          <option value="">Select time</option>
+                          {['8:00 AM', '8:30 AM', '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM',
+                            '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM',
+                            '2:00 PM', '2:30 PM', '3:00 PM'].map(time => (
+                            <option key={time} value={time}>{time}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Services Selection */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Services</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {['Pet Grooming', 'Health Checkups', 'Vaccination', 'Dental Care'].map((service) => (
+                        <label
+                          key={service}
+                          className="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={walkInData.services.includes(service)}
+                            onChange={() => handleWalkInServiceToggle(service)}
+                            className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
+                          />
+                          <span className="ml-3 text-gray-700 font-medium">{service}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Pet Details */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Pet Information</h3>
+                    
+                    {/* Number of Pets */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Number of Pets
+                      </label>
+                      <select
+                        value={walkInPetCount}
+                        onChange={(e) => {
+                          const count = Number(e.target.value);
+                          setWalkInPetCount(count);
+                          const newPets: any[] = [];
+                          for (let i = 0; i < count; i++) {
+                            if (walkInData.pets[i]) {
+                              newPets.push(walkInData.pets[i]);
+                            } else {
+                              newPets.push({ id: i + 1, type: 'dog', breed: '', name: '' });
+                            }
+                          }
+                          setWalkInData(prev => ({ ...prev, pets: newPets }));
+                        }}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      >
+                        {[1, 2, 3, 4, 5].map(num => (
+                          <option key={num} value={num}>{num}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Pet Details Forms */}
+                    <div className="space-y-4">
+                      {walkInData.pets.map((pet, index) => (
+                        <div key={pet.id} className="border border-gray-200 rounded-lg p-4">
+                          <h4 className="font-medium text-gray-800 mb-3">Pet #{index + 1}</h4>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {/* Pet Name */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Pet Name *
+                              </label>
+                              <input
+                                type="text"
+                                value={pet.name}
+                                onChange={(e) => {
+                                  const updatedPets = [...walkInData.pets];
+                                  updatedPets[index] = { ...updatedPets[index], name: e.target.value };
+                                  setWalkInData(prev => ({ ...prev, pets: updatedPets }));
+                                }}
+                                placeholder="Enter pet's name"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                                required
+                              />
+                            </div>
+
+                            {/* Pet Type */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Pet Type
+                              </label>
+                              <select
+                                value={pet.type}
+                                onChange={(e) => {
+                                  const updatedPets = [...walkInData.pets];
+                                  updatedPets[index] = { ...updatedPets[index], type: e.target.value, breed: '' };
+                                  setWalkInData(prev => ({ ...prev, pets: updatedPets }));
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                              >
+                                <option value="dog">Dog</option>
+                                <option value="cat">Cat</option>
+                              </select>
+                            </div>
+
+                            {/* Breed */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Breed *
+                              </label>
+                              <select
+                                value={pet.breed}
+                                onChange={(e) => {
+                                  const updatedPets = [...walkInData.pets];
+                                  updatedPets[index] = { ...updatedPets[index], breed: e.target.value };
+                                  setWalkInData(prev => ({ ...prev, pets: updatedPets }));
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                                required
+                              >
+                                <option value="">Select a breed</option>
+                                {(pet.type === 'dog' 
+                                  ? ['Labrador Retriever', 'Golden Retriever', 'German Shepherd', 'Bulldog',
+                                     'Poodle', 'Beagle', 'Rottweiler', 'Yorkshire Terrier', 'Dachshund',
+                                     'Siberian Husky', 'Boxer', 'Border Collie', 'Mixed Breed', 'Other']
+                                  : ['Persian', 'Maine Coon', 'British Shorthair', 'Ragdoll', 'Bengal',
+                                     'Siamese', 'Abyssinian', 'Russian Blue', 'Scottish Fold', 'Sphynx',
+                                     'American Shorthair', 'Domestic Shorthair', 'Mixed Breed', 'Other']
+                                ).map(breed => (
+                                  <option key={breed} value={breed}>{breed}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* Grooming Details - Show when Pet Grooming is selected */}
+                          {walkInData.services.includes('Pet Grooming') && (
+                            <div className="mt-4 pt-4 border-t border-gray-200">
+                              <div className="flex items-center justify-between mb-3">
+                                <h5 className="text-sm font-semibold text-gray-700">
+                                  Pet Grooming Details for {pet.name || `Pet #${index + 1}`}
+                                </h5>
+                                <button
+                                  type="button"
+                                  onClick={() => handleWalkInGroomingModalOpen(index)}
+                                  className="text-sm bg-teal-100 text-teal-700 px-3 py-1 rounded-full hover:bg-teal-200 transition-colors"
+                                >
+                                  {pet.groomingDetails ? 'Edit Package' : 'Select Package'}
+                                </button>
+                              </div>
+                              
+                              {pet.groomingDetails && (
+                                <div className="bg-gray-50 p-3 rounded-lg">
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                                    <div>
+                                      <span className="font-medium text-gray-600">Package:</span>
+                                      <p className="text-gray-800">{pet.groomingDetails.category}</p>
+                                    </div>
+                                    <div>
+                                      <span className="font-medium text-gray-600">Size:</span>
+                                      <p className="text-gray-800">{pet.groomingDetails.size}</p>
+                                    </div>
+                                    <div>
+                                      <span className="font-medium text-gray-600">Price:</span>
+                                      <p className="text-gray-800 font-semibold">₱{pet.groomingDetails.price}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Grooming Cost Summary */}
+                  {walkInData.services.includes('Pet Grooming') && walkInData.pets.some(pet => pet.groomingDetails) && (
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <h3 className="font-semibold text-gray-800 mb-3">Grooming Services Summary</h3>
+                      {walkInData.pets.map((pet, index) => {
+                        if (!pet.groomingDetails) return null;
+                        
+                        return (
+                          <div key={index} className="mb-3 last:mb-0">
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="font-medium text-gray-700">
+                                {pet.name || `Pet ${index + 1}`}
+                              </span>
+                              <span className="text-teal-600 font-semibold">₱{pet.groomingDetails.price}</span>
+                            </div>
+                            <div className="text-sm text-gray-600 space-y-1">
+                              <div className="ml-4 flex justify-between">
+                                <span>{pet.groomingDetails.category} ({pet.groomingDetails.size})</span>
+                                <span>₱{pet.groomingDetails.price}</span>
+                              </div>
+                              <div className="ml-4 text-xs text-gray-500">
+                                {pet.groomingDetails.isPackage ? 'Package Service' : 'Individual Service'}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="pt-3 border-t border-gray-300 mt-3">
+                        <div className="flex justify-between items-center font-semibold text-lg">
+                          <span className="text-gray-800">Total Grooming Cost:</span>
+                          <span className="text-teal-600">
+                            ₱{walkInData.pets.reduce((total, pet) => {
+                              return total + (pet.groomingDetails?.price || 0);
+                            }, 0)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
+                  <div className="pt-6 border-t border-gray-200">
+                    <button
+                      type="submit"
+                      disabled={walkInLoading}
+                      className={`w-full py-3 px-6 rounded-lg font-medium transition-colors focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 ${
+                        walkInLoading 
+                          ? 'bg-gray-400 text-white cursor-not-allowed' 
+                          : 'bg-teal-600 text-white hover:bg-teal-700'
+                      }`}
+                    >
+                      {walkInLoading ? 'Creating Appointment...' : 'Create Walk-In Appointment'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Customers Management */}
+          {activeTab === 'customers' && (
+            <div className="bg-white rounded-lg shadow">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4 sm:mb-0">
+                    Customer Management
+                  </h2>
+                  <button
+                    onClick={fetchCustomers}
+                    disabled={customersLoading}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50"
+                  >
+                    {customersLoading ? (
+                      <>
+                        <FaSpinner className="animate-spin mr-2" />
+                        Loading...
+                      </>
+                    ) : (
+                      'Refresh Customers'
+                    )}
+                  </button>
+                </div>
+                <p className="text-gray-600 mt-1">View all customers and their pet appointment history</p>
+                
+                {/* Search and Filter Section */}
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {/* Search Input */}
+                  <div className="lg:col-span-2">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search customers..."
+                        value={customerSearchTerm}
+                        onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      />
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Filter Type Dropdown */}
+                  <div>
+                    <select
+                      value={customerFilterType}
+                      onChange={(e) => setCustomerFilterType(e.target.value as any)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    >
+                      <option value="all">Search All Fields</option>
+                      <option value="name">Customer Name</option>
+                      <option value="email">Email Address</option>
+                      <option value="petName">Pet Name</option>
+                      <option value="lastVisit">Last Visit Date</option>
+                    </select>
+                  </div>
+
+                  {/* Verification Filter */}
+                  <div>
+                    <select
+                      value={verificationFilter}
+                      onChange={(e) => setVerificationFilter(e.target.value as any)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    >
+                      <option value="all">All Customers</option>
+                      <option value="verified">Verified Only</option>
+                      <option value="unverified">Unverified Only</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Filter Actions and Results Count */}
+                <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center space-x-4">
+                    {(customerSearchTerm || customerFilterType !== 'all' || verificationFilter !== 'all') && (
+                      <button
+                        onClick={clearCustomerFilters}
+                        className="text-sm text-teal-600 hover:text-teal-800 transition-colors"
+                      >
+                        Clear Filters
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-sm text-gray-500 mt-2 sm:mt-0">
+                    Showing {getFilteredCustomers().length} of {customers.length} customers
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6">
+                {customersLoading ? (
+                  <div className="flex justify-center items-center py-8">
+                    <FaSpinner className="animate-spin text-2xl text-teal-600" />
+                  </div>
+                ) : getFilteredCustomers().length === 0 ? (
+                  <div className="text-center py-8">
+                    {customers.length === 0 ? (
+                      <p className="text-gray-500">No customers found.</p>
+                    ) : (
+                      <div>
+                        <p className="text-gray-500 mb-2">No customers match your search criteria.</p>
+                        <button
+                          onClick={clearCustomerFilters}
+                          className="text-teal-600 hover:text-teal-800 text-sm"
+                        >
+                          Clear filters to show all customers
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {getFilteredCustomers().map((customer) => (
+                      <div key={customer.id} className="border border-gray-200 rounded-lg">
+                        {/* Customer Header */}
+                        <div 
+                          className="px-4 py-3 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => setExpandedCustomer(expandedCustomer === customer.id ? null : customer.id)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
+                                <FaUsers className="text-teal-600" />
+                              </div>
+                              <div>
+                                <h3 className="text-lg font-medium text-gray-900">{customer.name}</h3>
+                                <p className="text-sm text-gray-500">{customer.email}</p>
+                                {customer.email_verified_at && (
+                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 mt-1">
+                                    Verified
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-gray-500">
+                                {customer.total_appointments} appointment{customer.total_appointments !== 1 ? 's' : ''}
+                              </p>
+                              {customer.last_appointment && (
+                                <p className="text-xs text-gray-400">
+                                  Last: {new Date(customer.last_appointment).toLocaleDateString()}
+                                </p>
+                              )}
+                              <div className="mt-1">
+                                {expandedCustomer === customer.id ? (
+                                  <FaTimes className="text-gray-400" />
+                                ) : (
+                                  <FaEye className="text-gray-400" />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Expanded Customer Details */}
+                        {expandedCustomer === customer.id && (
+                          <div className="px-4 py-4 border-t border-gray-200">
+                            {customer.pets.length === 0 ? (
+                              <p className="text-gray-500 text-center py-4">No pets registered yet.</p>
+                            ) : (
+                              <div className="space-y-4">
+                                <h4 className="font-medium text-gray-900">Pets & Appointment History</h4>
+                                {customer.pets.map((pet: any, petIndex: number) => (
+                                  <div key={petIndex} className="border border-gray-100 rounded-lg">
+                                    {/* Pet Header */}
+                                    <div 
+                                      className="px-3 py-2 bg-gray-25 cursor-pointer hover:bg-gray-50 transition-colors"
+                                      onClick={() => setExpandedPet(expandedPet === `${customer.id}-${petIndex}` ? null : `${customer.id}-${petIndex}`)}
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-3">
+                                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                            <span className="text-blue-600 text-sm font-medium">
+                                              {pet.type === 'dog' ? '🐕' : '🐱'}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            <p className="font-medium text-gray-800">{pet.name || 'Unnamed Pet'}</p>
+                                            <p className="text-sm text-gray-500">{pet.breed} ({pet.type})</p>
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <p className="text-sm text-gray-500">
+                                            {pet.appointments.length} visit{pet.appointments.length !== 1 ? 's' : ''}
+                                          </p>
+                                          <div className="mt-1">
+                                            {expandedPet === `${customer.id}-${petIndex}` ? (
+                                              <FaTimes className="text-gray-400 text-sm" />
+                                            ) : (
+                                              <FaEye className="text-gray-400 text-sm" />
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Expanded Pet Appointment History */}
+                                    {expandedPet === `${customer.id}-${petIndex}` && (
+                                      <div className="px-3 py-3 border-t border-gray-100">
+                                        {pet.appointments.length === 0 ? (
+                                          <p className="text-gray-400 text-sm text-center py-2">No appointment history</p>
+                                        ) : (
+                                          <div className="space-y-2">
+                                            <h5 className="text-sm font-medium text-gray-700 mb-2">Appointment History</h5>
+                                            {pet.appointments.map((appointment: any, appIndex: number) => (
+                                              <div key={appIndex} className="bg-white border border-gray-100 rounded p-3 text-sm">
+                                                <div className="flex items-center justify-between mb-2">
+                                                  <div className="flex items-center space-x-2">
+                                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                                      appointment.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                                      appointment.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                                                      appointment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                                      'bg-red-100 text-red-800'
+                                                    }`}>
+                                                      {appointment.status}
+                                                    </span>
+                                                    <span className="text-gray-600">
+                                                      {new Date(appointment.appointment_date).toLocaleDateString()} at {appointment.appointment_time}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                                <div className="text-gray-600">
+                                                  <p><strong>Services:</strong> {appointment.services.join(', ')}</p>
+                                                  {appointment.notes && (
+                                                    <p><strong>Notes:</strong> {appointment.notes}</p>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Pet Records Management */}
           {activeTab === 'petRecords' && (
@@ -1596,7 +2674,9 @@ const AdminDashboard: React.FC = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Services Total:</span>
-                    <span className="font-medium">₱{selectedAppointment.services.reduce((sum, service) => sum + parseFloat(service.price), 0)}</span>
+                    <span className="font-medium">₱{selectedAppointment.services
+                      .filter(service => service.name !== 'Pet Grooming')
+                      .reduce((sum, service) => sum + (parseFloat(service.price) || 0), 0)}</span>
                   </div>
                   {selectedAppointment.pets.some(pet => pet.grooming_details) && (
                     <div className="flex justify-between">
@@ -1622,7 +2702,9 @@ const AdminDashboard: React.FC = () => {
                     <div className="flex justify-between text-lg font-bold">
                       <span className="text-gray-900">Grand Total:</span>
                       <span className="text-teal-600">
-                        ₱{selectedAppointment.services.reduce((sum, service) => sum + parseFloat(service.price), 0) +
+                        ₱{selectedAppointment.services
+                          .filter(service => service.name !== 'Pet Grooming')
+                          .reduce((sum, service) => sum + (parseFloat(service.price) || 0), 0) +
                           selectedAppointment.pets.reduce((total, pet) => {
                             return total + calculatePetGroomingTotal(pet.grooming_details);
                           }, 0) +
@@ -1670,6 +2752,18 @@ const AdminDashboard: React.FC = () => {
                         className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
                       >
                         {updatingStatus === selectedAppointment.id ? <FaSpinner className="animate-spin" /> : 'Mark Complete'}
+                      </button>
+                    )}
+                    {['pending', 'confirmed'].includes(selectedAppointment.status) && (
+                      <button
+                        onClick={() => {
+                          handleRescheduleClick(selectedAppointment.id);
+                          handleCloseDetails();
+                        }}
+                        disabled={updatingStatus === selectedAppointment.id}
+                        className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 transition-colors"
+                      >
+                        Reschedule
                       </button>
                     )}
                     <button
@@ -1968,7 +3062,9 @@ const AdminDashboard: React.FC = () => {
                     <span>Grand Total:</span>
                     <span className="text-teal-600">
                       ₱{(
-                        appointmentToComplete.services.reduce((sum, service) => sum + parseFloat(service.price), 0) +
+                        appointmentToComplete.services
+                          .filter(service => service.name !== 'Pet Grooming')
+                          .reduce((sum, service) => sum + (parseFloat(service.price) || 0), 0) +
                         appointmentToComplete.pets.reduce((total, pet) => total + calculatePetGroomingTotal(pet.grooming_details), 0) +
                         medicalExam.totalCost
                       ).toFixed(2)}
@@ -2117,6 +3213,196 @@ const AdminDashboard: React.FC = () => {
                   className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Walk-In Grooming Selection Modal */}
+      {showWalkInGroomingModal && currentWalkInPetForGrooming !== null && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-gray-900">
+                  Select Grooming Package for {walkInData.pets[currentWalkInPetForGrooming]?.name || `Pet #${currentWalkInPetForGrooming + 1}`}
+                </h3>
+                <button
+                  onClick={handleWalkInGroomingModalClose}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              {/* Package Services */}
+              <div className="mb-8">
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">Package Services</h4>
+                <div className="space-y-6">
+                  {Object.entries(groomingPackages).map(([packageName, sizes]) => (
+                    <div key={packageName} className="border border-gray-200 rounded-lg p-4">
+                      <h5 className="font-medium text-gray-700 mb-3">{packageName}</h5>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                        {Object.entries(sizes).map(([size, price]) => (
+                          <button
+                            key={`${packageName}-${size}`}
+                            type="button"
+                            onClick={() => {
+                              updateWalkInPetGrooming(currentWalkInPetForGrooming, packageName, size, price, true);
+                              handleWalkInGroomingModalClose();
+                            }}
+                            className="p-3 border border-gray-300 rounded-lg hover:bg-teal-50 hover:border-teal-300 transition-colors text-center"
+                          >
+                            <div className="font-medium text-gray-800">{size}</div>
+                            <div className="text-teal-600 font-semibold">₱{price}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Individual Services */}
+              <div>
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">Individual Services</h4>
+                <div className="space-y-6">
+                  {Object.entries(individualServices).map(([serviceName, sizes]) => (
+                    <div key={serviceName} className="border border-gray-200 rounded-lg p-4">
+                      <h5 className="font-medium text-gray-700 mb-3">{serviceName}</h5>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                        {Object.entries(sizes).map(([size, price]) => (
+                          <button
+                            key={`${serviceName}-${size}`}
+                            type="button"
+                            onClick={() => {
+                              updateWalkInPetGrooming(currentWalkInPetForGrooming, serviceName, size, price, false);
+                              handleWalkInGroomingModalClose();
+                            }}
+                            className="p-3 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors text-center"
+                          >
+                            <div className="font-medium text-gray-800">{size}</div>
+                            <div className="text-blue-600 font-semibold">₱{price}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4">
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-gray-600">
+                  Select a package or individual service for your pet
+                </p>
+                <button
+                  onClick={handleWalkInGroomingModalClose}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reschedule Appointment Modal */}
+      {showRescheduleModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-900">Reschedule Appointment</h2>
+                <button
+                  onClick={closeRescheduleModal}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <FaTimes size={24} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="space-y-6">
+                {/* Date Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    New Appointment Date
+                  </label>
+                  <input
+                    type="date"
+                    value={newSelectedDate ? newSelectedDate.toISOString().split('T')[0] : ''}
+                    onChange={(e) => setNewSelectedDate(e.target.value ? new Date(e.target.value) : undefined)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    required
+                  />
+                </div>
+
+                {/* Time Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    New Appointment Time
+                  </label>
+                  <select
+                    value={newSelectedTime}
+                    onChange={(e) => setNewSelectedTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    required
+                  >
+                    <option value="">Select time</option>
+                    <option value="9:00 AM">9:00 AM</option>
+                    <option value="10:00 AM">10:00 AM</option>
+                    <option value="11:00 AM">11:00 AM</option>
+                    <option value="1:00 PM">1:00 PM</option>
+                    <option value="2:00 PM">2:00 PM</option>
+                    <option value="3:00 PM">3:00 PM</option>
+                    <option value="4:00 PM">4:00 PM</option>
+                    <option value="5:00 PM">5:00 PM</option>
+                  </select>
+                </div>
+
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <p className="text-sm text-yellow-800">
+                    ⚠️ Please note: Appointments cannot be scheduled on Sundays.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4">
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={closeRescheduleModal}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                  disabled={isRescheduling}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRescheduleSubmit}
+                  disabled={!newSelectedDate || !newSelectedTime || isRescheduling}
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
+                >
+                  {isRescheduling ? (
+                    <>
+                      <FaSpinner className="animate-spin mr-2" />
+                      Rescheduling...
+                    </>
+                  ) : (
+                    'Reschedule Appointment'
+                  )}
                 </button>
               </div>
             </div>
