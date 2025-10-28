@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\MedicalRecordController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\ProductController;
 
 Route::post('/register', [UserController::class, 'register']);
 
@@ -32,6 +34,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [UserController::class, 'logout']);
     Route::post('/logout-all', [UserController::class, 'logoutAll']);
     Route::get('/user', [UserController::class, 'user']);
+    
+    // Account settings routes
+    Route::put('/profile', [UserController::class, 'updateProfile']);
+    Route::put('/change-password', [UserController::class, 'changePassword']);
 });
 
 // Protected appointment routes (require authentication)
@@ -46,9 +52,11 @@ Route::middleware('auth:sanctum')->group(function () {
 // Admin/Staff routes (require staff or admin role)
 Route::middleware(['auth:sanctum', 'role:staff,admin'])->group(function () {
     Route::get('/admin/appointments', [AdminController::class, 'getAllAppointments']);
+    Route::get('/admin/appointments/{id}', [AdminController::class, 'getAppointmentById']);
     Route::put('/admin/appointments/{id}/status', [AdminController::class, 'updateAppointmentStatus']);
     Route::put('/admin/appointments/{id}/reschedule', [AdminController::class, 'rescheduleAppointment']);
     Route::delete('/admin/appointments/{id}', [AdminController::class, 'deleteAppointment']);
+    Route::post('/admin/appointments/complete', [AdminController::class, 'completeAppointment']);
     Route::post('/admin/walk-in-appointments', [AdminController::class, 'createWalkInAppointment']);
     Route::get('/admin/customers', [AdminController::class, 'getAllCustomers']);
     Route::get('/admin/dashboard', [AdminController::class, 'getDashboardStats']);
@@ -69,6 +77,11 @@ Route::middleware(['auth:sanctum', 'role:staff,admin'])->group(function () {
     Route::get('/medical-records', [MedicalRecordController::class, 'index']);
     Route::get('/medical-records/pet/{petId}', [MedicalRecordController::class, 'getPetRecords']);
     Route::get('/medical-records/search', [MedicalRecordController::class, 'search']);
+    
+    // Inventory Management routes
+    Route::apiResource('categories', CategoryController::class);
+    Route::apiResource('products', ProductController::class);
+    Route::post('/products/{id}/quantity', [ProductController::class, 'updateQuantity']);
 });
 
 // Admin only routes (require admin role)
