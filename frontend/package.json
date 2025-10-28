@@ -11,6 +11,8 @@
     "@types/node": "^16.18.126",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
+    "jspdf": "^3.0.3",
+    "jspdf-autotable": "^5.0.2",
     "motion": "^12.23.24",
     "react": "^19.2.0",
     "react-day-picker": "^9.11.1",
