@@ -5,6 +5,7 @@ import './App.css';
 import Home from './pages/home';
 import Login from './pages/login';
 import Register from './pages/register';
+import ResetPassword from './pages/resetPassword';
 import SetAppointment from './pages/setAppointment';
 import AdminDashboard from './pages/adminDashboard';
 import MyAppointments from './pages/myAppointments';
@@ -23,6 +24,7 @@ function App() {
             <Route path="" element={<Navigate to="/home" />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/email/verified" element={<EmailVerified />} />
             <Route path="/set-appointment" element={<SetAppointment />} />
             <Route path="/my-appointments" element={<MyAppointments />} />
