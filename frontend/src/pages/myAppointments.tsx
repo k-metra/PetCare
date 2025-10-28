@@ -14,7 +14,9 @@ import {
     FaExclamationCircle, 
     FaTimesCircle,
     FaSpinner,
-    FaPlus
+    FaPlus,
+    FaClipboardList,
+    FaEye
 } from 'react-icons/fa';
 
 interface Pet {
@@ -28,6 +30,29 @@ interface Service {
     name: string;
 }
 
+interface TestOption {
+    name: string;
+    price: number;
+}
+
+interface MedicalRecord {
+    id: number;
+    appointment_id: number;
+    pet_id: number;
+    pet_name: string;
+    doctor_name: string | null;
+    weight: string | null;
+    symptoms: string | null;
+    medication: string | null;
+    treatment: string | null;
+    diagnosis: string | null;
+    test_type: string | null;
+    selected_tests: TestOption[];
+    test_cost: number | null;
+    notes: string | null;
+    created_at: string;
+}
+
 interface Appointment {
     id: number;
     appointment_date: string;
@@ -37,6 +62,7 @@ interface Appointment {
     pets: Pet[];
     services: Service[];
     created_at: string;
+    medical_records?: MedicalRecord[];
 }
 
 export default function MyAppointments() {
@@ -51,6 +77,9 @@ export default function MyAppointments() {
     const [rescheduleAppointmentId, setRescheduleAppointmentId] = useState<number | null>(null);
     const [newSelectedDate, setNewSelectedDate] = useState<Date | undefined>(undefined);
     const [newSelectedTime, setNewSelectedTime] = useState<string>('');
+    
+    // Medical records state
+    const [expandedMedicalRecords, setExpandedMedicalRecords] = useState<number | null>(null);
 
     const params = new URLSearchParams(window.location.search);
     const action = params.get('action');
@@ -467,6 +496,18 @@ export default function MyAppointments() {
                                                     </button>
                                                 </div>
                                             )}
+
+                                            {appointment.status === 'completed' && appointment.medical_records && appointment.medical_records.length > 0 && (
+                                                <div className="mb-4 flex items-center">
+                                                    <button
+                                                        onClick={() => setExpandedMedicalRecords(expandedMedicalRecords === appointment.id ? null : appointment.id)}
+                                                        className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors-transform duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg text-sm flex items-center gap-2"
+                                                    >
+                                                        <FaClipboardList />
+                                                        {expandedMedicalRecords === appointment.id ? 'Hide Medical Records' : 'View Medical Records'}
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                         
 
@@ -477,6 +518,105 @@ export default function MyAppointments() {
                                                 <p className="text-gray-600 text-sm bg-gray-50 p-3 rounded">
                                                     {appointment.notes}
                                                 </p>
+                                            </div>
+                                        )}
+
+                                        {/* Medical Records Section (for completed appointments) */}
+                                        {appointment.status === 'completed' && appointment.medical_records && appointment.medical_records.length > 0 && (
+                                            <div className="border-t border-gray-200 pt-4">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <h4 className="text-sm font-semibold text-gray-700">Medical Records</h4>
+                                                    <button
+                                                        onClick={() => setExpandedMedicalRecords(expandedMedicalRecords === appointment.id ? null : appointment.id)}
+                                                        className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm transition-colors"
+                                                    >
+                                                        <FaEye />
+                                                        {expandedMedicalRecords === appointment.id ? 'Hide Records' : 'View Records'}
+                                                    </button>
+                                                </div>
+
+                                                {expandedMedicalRecords === appointment.id && (
+                                                    <div className="space-y-4">
+                                                        {appointment.medical_records.map((record, index) => (
+                                                            <div key={index} className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-gray-600">Pet Name</p>
+                                                                        <p className="text-gray-900">{record.pet_name}</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-gray-600">Doctor</p>
+                                                                        <p className="text-gray-900">{record.doctor_name ? `Dr. ${record.doctor_name}` : 'N/A'}</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-gray-600">Weight</p>
+                                                                        <p className="text-gray-900">{record.weight ? `${record.weight} kg` : 'N/A'}</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-gray-600">Test Type</p>
+                                                                        <p className="text-gray-900">{record.test_type || 'N/A'}</p>
+                                                                    </div>
+                                                                </div>
+                                                                
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-gray-600">Symptoms</p>
+                                                                        <p className="text-gray-900">{record.symptoms || 'N/A'}</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-gray-600">Diagnosis</p>
+                                                                        <p className="text-gray-900">{record.diagnosis || 'N/A'}</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-gray-600">Medication</p>
+                                                                        <p className="text-gray-900">{record.medication || 'N/A'}</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-gray-600">Treatment</p>
+                                                                        <p className="text-gray-900">{record.treatment || 'N/A'}</p>
+                                                                    </div>
+                                                                </div>
+
+                                                                {record.selected_tests && record.selected_tests.length > 0 && (
+                                                                    <div className="mb-4">
+                                                                        <p className="text-sm font-medium text-gray-600 mb-2">Tests Performed</p>
+                                                                        <div className="space-y-2">
+                                                                            {record.selected_tests.map((test, testIndex) => (
+                                                                                <div key={testIndex} className="bg-white rounded p-2 flex justify-between items-center">
+                                                                                    <span className="text-sm text-gray-900">{test.name}</span>
+                                                                                    <span className="text-sm font-medium text-purple-600">₱{test.price}</span>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                        <div className="mt-2 pt-2 border-t border-gray-200">
+                                                                            <div className="flex justify-between text-sm font-medium">
+                                                                                <span>Test Cost for {record.pet_name}:</span>
+                                                                                <span className="text-purple-600">₱{record.test_cost || 0}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {record.notes && (
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-gray-600">Notes</p>
+                                                                        <p className="text-gray-900 text-sm">{record.notes}</p>
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="mt-3 pt-3 border-t border-purple-200">
+                                                                    <p className="text-xs text-gray-500">
+                                                                        Examination Date: {new Date(record.created_at).toLocaleDateString('en-US', {
+                                                                            year: 'numeric',
+                                                                            month: 'long',
+                                                                            day: 'numeric'
+                                                                        })}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>

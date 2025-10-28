@@ -117,6 +117,22 @@ class AppointmentController extends Controller
                 ->orderBy('appointment_time', 'desc')
                 ->get();
 
+            // For completed appointments, include medical records
+            $appointments->transform(function ($appointment) {
+                if ($appointment->status === 'completed') {
+                    $medicalRecords = \DB::table('medical_records')
+                        ->where('appointment_id', $appointment->id)
+                        ->get()
+                        ->map(function ($record) {
+                            $record->selected_tests = json_decode($record->selected_tests, true);
+                            return $record;
+                        });
+                    
+                    $appointment->medical_records = $medicalRecords;
+                }
+                return $appointment;
+            });
+
             return response()->json([
                 'status' => true,
                 'appointments' => $appointments
