@@ -1037,20 +1037,34 @@ const SetAppointment: React.FC = () => {
                   <div key={packageName} className="border border-gray-200 rounded-lg p-4">
                     <h5 className="font-medium text-gray-700 mb-3">{packageName}</h5>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                      {Object.entries(sizes).map(([size, price]) => (
-                        <button
-                          key={`${packageName}-${size}`}
-                          type="button"
-                          onClick={() => {
-                            updatePetGrooming(currentPetForGrooming, packageName, size, price, true);
-                            handleGroomingModalClose();
-                          }}
-                          className="p-3 border border-gray-300 rounded-lg hover:bg-teal-50 hover:border-teal-300 transition-colors text-center"
-                        >
-                          <div className="font-medium text-gray-800">{size}</div>
-                          <div className="text-teal-600 font-semibold">₱{price}</div>
-                        </button>
-                      ))}
+                      {Object.entries(sizes).map(([size, price]) => {
+                        const getWeightRange = (size: string) => {
+                          switch(size) {
+                            case 'X-Small': return '<5kg';
+                            case 'Small': return '5.1-8.5kg';
+                            case 'Medium': return '8.6-17kg';
+                            case 'Large': return '17.1-35kg';
+                            case 'X-Large': return '35.1kg+';
+                            default: return '';
+                          }
+                        };
+                        
+                        return (
+                          <button
+                            key={`${packageName}-${size}`}
+                            type="button"
+                            onClick={() => {
+                              updatePetGrooming(currentPetForGrooming, packageName, size, price, true);
+                              handleGroomingModalClose();
+                            }}
+                            className="p-3 border border-gray-300 rounded-lg hover:bg-teal-50 hover:border-teal-300 transition-colors text-center"
+                          >
+                            <div className="font-medium text-gray-800">{size}</div>
+                            <div className="text-xs text-gray-500 mb-1">({getWeightRange(size)})</div>
+                            <div className="text-teal-600 font-semibold">₱{price}</div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -1065,20 +1079,35 @@ const SetAppointment: React.FC = () => {
                   <div key={serviceName} className="border border-gray-200 rounded-lg p-4">
                     <h5 className="font-medium text-gray-700 mb-3">{serviceName}</h5>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                      {Object.entries(sizes).map(([size, price]) => (
-                        <button
-                          key={`${serviceName}-${size}`}
-                          type="button"
-                          onClick={() => {
-                            updatePetGrooming(currentPetForGrooming, serviceName, size, price, false);
-                            handleGroomingModalClose();
-                          }}
-                          className="p-3 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors text-center"
-                        >
-                          <div className="font-medium text-gray-800">{size}</div>
-                          <div className="text-blue-600 font-semibold">₱{price}</div>
-                        </button>
-                      ))}
+                      {Object.entries(sizes).map(([size, price]) => {
+                        const getWeightRange = (size: string) => {
+                          switch(size) {
+                            case 'X-Small': return '<5kg';
+                            case 'Small': return '5.1-8.5kg';
+                            case 'Medium': return '8.6-17kg';
+                            case 'Large': return '17.1-35kg';
+                            case 'X-Large': return '35.1kg+';
+                            case 'Any Size': return 'Any Size';
+                            default: return '';
+                          }
+                        };
+                        
+                        return (
+                          <button
+                            key={`${serviceName}-${size}`}
+                            type="button"
+                            onClick={() => {
+                              updatePetGrooming(currentPetForGrooming, serviceName, size, price, false);
+                              handleGroomingModalClose();
+                            }}
+                            className="p-3 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors text-center"
+                          >
+                            <div className="font-medium text-gray-800">{size}</div>
+                            <div className="text-xs text-gray-500 mb-1">({getWeightRange(size)})</div>
+                            <div className="text-blue-600 font-semibold">₱{price}</div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
