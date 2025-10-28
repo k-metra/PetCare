@@ -9,6 +9,7 @@ import ResetPassword from './pages/resetPassword';
 import SetAppointment from './pages/setAppointment';
 import AdminDashboard from './pages/adminDashboard';
 import MyAppointments from './pages/myAppointments';
+import AccountSettings from './pages/accountSettings';
 
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import EmailVerified from './pages/emailVerified';
@@ -28,6 +29,7 @@ function App() {
             <Route path="/email/verified" element={<EmailVerified />} />
             <Route path="/set-appointment" element={<SetAppointment />} />
             <Route path="/my-appointments" element={<MyAppointments />} />
+            <Route path="/account-settings" element={<AccountSettings />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
           </Routes>
         </div>
