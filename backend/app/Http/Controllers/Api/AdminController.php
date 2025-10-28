@@ -340,4 +340,339 @@ class AdminController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Create walk-in appointment (admin/staff only)
+     */
+    public function createWalkInAppointment(Request $request)
+    {
+        try {
+            // Log the incoming request for debugging
+            \Log::info('Walk-in appointment request received', [
+                'user_id' => $request->user()?->id,
+                'user_role' => $request->user()?->role,
+                'request_data' => $request->all()
+            ]);
+
+            $validatedData = $request->validate([
+                'customer_name' => 'required|string|max:255',
+                'customer_email' => 'required|string|email|max:255',
+                'appointment_date' => 'required|date|after_or_equal:today',
+                'appointment_time' => 'required|string',
+                'pets' => 'required|array|min:1',
+                'pets.*.type' => 'required|string|in:dog,cat',
+                'pets.*.breed' => 'required|string|max:255',
+                'pets.*.name' => 'required|string|max:255',
+                'pets.*.groomingDetails' => 'nullable|array',
+                'services' => 'required|array|min:1',
+                'services.*' => 'string',
+                'notes' => 'nullable|string|max:1000'
+            ]);
+
+            // Find or create user
+            $user = User::where('email', $validatedData['customer_email'])->first();
+            $nameWarning = null;
+            
+            if (!$user) {
+                // Create new user for walk-in customer
+                $user = User::create([
+                    'name' => $validatedData['customer_name'],
+                    'email' => $validatedData['customer_email'],
+                    'password' => bcrypt('defaultpassword123'), // Default password
+                    'role' => 'user',
+                    'email_verified_at' => now() // Auto-verify walk-in customers
+                ]);
+            } else {
+                // Check if the input name matches the existing user's name
+                if (trim(strtolower($validatedData['customer_name'])) !== trim(strtolower($user->name))) {
+                    $nameWarning = "Note: The email '{$validatedData['customer_email']}' belongs to '{$user->name}', not '{$validatedData['customer_name']}'. Using the correct name from our records.";
+                    
+                    \Log::info('Name mismatch detected for existing user', [
+                        'existing_name' => $user->name,
+                        'input_name' => $validatedData['customer_name'],
+                        'email' => $validatedData['customer_email'],
+                        'staff_user' => $request->user()->name
+                    ]);
+                }
+                // Don't update the user's name - preserve the correct name in the database
+            }
+
+            // Create appointment
+            $appointment = Appointment::create([
+                'user_id' => $user->id,
+                'appointment_date' => $validatedData['appointment_date'],
+                'appointment_time' => $validatedData['appointment_time'],
+                'status' => 'confirmed', // Walk-ins are auto-confirmed
+                'notes' => $validatedData['notes'] ?? 'Walk-in appointment created by staff'
+            ]);
+
+            // Add pets
+            foreach ($validatedData['pets'] as $petData) {
+                $appointment->pets()->create([
+                    'type' => $petData['type'],
+                    'breed' => $petData['breed'],
+                    'name' => $petData['name'],
+                    'grooming_details' => isset($petData['groomingDetails']) ? json_encode($petData['groomingDetails']) : null
+                ]);
+            }
+
+            // Add services
+            foreach ($validatedData['services'] as $serviceName) {
+                $appointment->services()->create([
+                    'name' => $serviceName,
+                    'description' => null
+                ]);
+            }
+
+            // Load relationships for response
+            $appointment->load(['user', 'pets', 'services']);
+
+            $responseData = [
+                'status' => true,
+                'message' => 'Walk-in appointment created successfully',
+                'appointment' => $appointment
+            ];
+
+            // Add warning if there was a name mismatch
+            if ($nameWarning) {
+                $responseData['warning'] = $nameWarning;
+                $responseData['corrected_name'] = $user->name;
+            }
+
+            $response = response()->json($responseData, 201);
+
+            return $response->header('Access-Control-Allow-Origin', '*')
+                          ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                          ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::error('Walk-in appointment validation failed', [
+                'errors' => $e->errors(),
+                'request_data' => $request->all()
+            ]);
+            
+            $response = response()->json([
+                'status' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \Log::error('Walk-in appointment creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
+            ]);
+            
+            $response = response()->json([
+                'status' => false,
+                'message' => 'Failed to create walk-in appointment',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+
+        return $response->header('Access-Control-Allow-Origin', '*')
+                      ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                      ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    }
+
+    /**
+     * Reschedule any appointment (admin function)
+     */
+    public function rescheduleAppointment(Request $request, $id)
+    {
+        try {
+            // Find the appointment (not restricted to user ownership)
+            $appointment = Appointment::findOrFail($id);
+            
+            // Only allow rescheduling of pending and confirmed appointments
+            if (!in_array($appointment->status, ['pending', 'confirmed'])) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Only pending and confirmed appointments can be rescheduled'
+                ], 400)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+            }
+
+            // Validate the request
+            $validatedData = $request->validate([
+                'appointment_date' => 'required|date|after_or_equal:today',
+                'appointment_time' => 'required|string',
+            ]);
+
+            // Check if the selected date is not Sunday
+            $selectedDate = new \DateTime($validatedData['appointment_date']);
+            if ($selectedDate->format('w') == 0) { // 0 = Sunday
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Appointments cannot be scheduled on Sundays'
+                ], 422)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+            }
+
+            // Log the reschedule action
+            \Log::info('Admin rescheduling appointment', [
+                'appointment_id' => $id,
+                'admin_user' => $request->user()->name,
+                'old_date' => $appointment->appointment_date,
+                'old_time' => $appointment->appointment_time,
+                'new_date' => $validatedData['appointment_date'],
+                'new_time' => $validatedData['appointment_time'],
+                'customer' => $appointment->user->name ?? 'Unknown'
+            ]);
+
+            // Update appointment
+            $appointment->update([
+                'appointment_date' => $validatedData['appointment_date'],
+                'appointment_time' => $validatedData['appointment_time'],
+            ]);
+            
+            // Load relationships for response
+            $appointment->load(['user', 'pets', 'services']);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Appointment rescheduled successfully',
+                'appointment' => $appointment
+            ], 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Appointment not found'
+            ], 404)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        } catch (\Exception $e) {
+            \Log::error('Admin appointment reschedule failed', [
+                'appointment_id' => $id,
+                'error' => $e->getMessage(),
+                'admin_user' => $request->user()->name ?? 'Unknown'
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to reschedule appointment',
+                'error' => $e->getMessage()
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        }
+    }
+
+    /**
+     * Get all customers (non-staff users) with their pets and appointment history
+     */
+    public function getAllCustomers(Request $request)
+    {
+        try {
+            // Get all non-staff users (customers only)
+            $customers = User::where('role', 'user')
+                ->with([
+                    'appointments' => function ($query) {
+                        $query->with(['pets', 'services'])
+                              ->orderBy('appointment_date', 'desc');
+                    }
+                ])
+                ->orderBy('name')
+                ->get();
+
+            // Group pets by customer and include appointment history for each pet
+            $customersWithPetHistory = $customers->map(function ($customer) {
+                // Get all unique pets from appointments
+                $allPets = collect();
+                
+                foreach ($customer->appointments as $appointment) {
+                    foreach ($appointment->pets as $pet) {
+                        // Check if we already have this pet (by name and type)
+                        $existingPet = $allPets->first(function ($existingPet) use ($pet) {
+                            return $existingPet['name'] === $pet->name && 
+                                   $existingPet['type'] === $pet->type &&
+                                   $existingPet['breed'] === $pet->breed;
+                        });
+
+                        if (!$existingPet) {
+                            // Add new pet with its appointment history
+                            $petAppointments = $customer->appointments->filter(function ($appointment) use ($pet) {
+                                return $appointment->pets->contains(function ($appointmentPet) use ($pet) {
+                                    return $appointmentPet->name === $pet->name && 
+                                           $appointmentPet->type === $pet->type &&
+                                           $appointmentPet->breed === $pet->breed;
+                                });
+                            })->values();
+
+                            $allPets->push([
+                                'id' => $pet->id,
+                                'name' => $pet->name,
+                                'type' => $pet->type,
+                                'breed' => $pet->breed,
+                                'appointments' => $petAppointments->map(function ($appointment) {
+                                    return [
+                                        'id' => $appointment->id,
+                                        'appointment_date' => $appointment->appointment_date,
+                                        'appointment_time' => $appointment->appointment_time,
+                                        'status' => $appointment->status,
+                                        'services' => $appointment->services->pluck('name'),
+                                        'notes' => $appointment->notes,
+                                        'created_at' => $appointment->created_at
+                                    ];
+                                })
+                            ]);
+                        }
+                    }
+                }
+
+                return [
+                    'id' => $customer->id,
+                    'name' => $customer->name,
+                    'email' => $customer->email,
+                    'email_verified_at' => $customer->email_verified_at,
+                    'created_at' => $customer->created_at,
+                    'total_appointments' => $customer->appointments->count(),
+                    'last_appointment' => $customer->appointments->first()?->appointment_date,
+                    'pets' => $allPets
+                ];
+            });
+
+            return response()->json([
+                'status' => true,
+                'customers' => $customersWithPetHistory
+            ], 200)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to fetch customers', [
+                'error' => $e->getMessage(),
+                'admin_user' => $request->user()->name ?? 'Unknown'
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to fetch customers',
+                'error' => $e->getMessage()
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        }
+    }
 }
