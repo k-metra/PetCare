@@ -309,4 +309,140 @@ class UserController extends Controller
                 ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
         }
     }
+
+    /**
+     * Validate Philippine phone number format
+     */
+    private function validatePhoneNumber($phoneNumber)
+    {
+        // Remove all spaces and special characters except + for validation
+        $cleanNumber = preg_replace('/[\s\-\(\)]/', '', $phoneNumber);
+        
+        // Valid Philippine phone number patterns (local clinic focus)
+        $patterns = [
+            '/^639\d{9}$/',           // 639939928496 (12 digits total)
+            '/^09\d{9}$/',            // 09939928496 (11 digits total) - FIXED
+            '/^9\d{9}$/',             // 9939928496 (10 digits total)
+            '/^\+639\d{9}$/',         // +639939928496
+            '/^\d{9}$/',              // 993992496 (9 digits - core number)
+            '/^0\d{9}$/'              // 0993992496 (10 digits with leading 0)
+        ];
+        
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $cleanNumber)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Update user profile (phone number)
+     */
+    public function updateProfile(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'phone_number' => [
+                    'nullable',
+                    'string',
+                    function ($attribute, $value, $fail) {
+                        if ($value && !$this->validatePhoneNumber($value)) {
+                            $fail('The phone number format is invalid. Please use formats like: 09939928496, 639939928496, 993 992 8496, etc.');
+                        }
+                    },
+                ],
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $user = $request->user();
+            
+            // Update phone number if provided
+            if ($request->has('phone_number')) {
+                $user->phone_number = $request->phone_number;
+            }
+            
+            $user->save();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Profile updated successfully',
+                'user' => $user
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to update profile',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Change user password
+     */
+    public function changePassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'current_password' => 'required|string',
+                'new_password' => 'required|string|min:8|confirmed',
+                'new_password_confirmation' => 'required|string',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $user = $request->user();
+
+            // Check if current password is correct
+            if (!Hash::check($request->current_password, $user->password)) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Current password is incorrect'
+                ], 400);
+            }
+
+            // Check if new password is different from current password
+            if (Hash::check($request->new_password, $user->password)) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'New password must be different from current password'
+                ], 400);
+            }
+
+            // Update password
+            $user->password = Hash::make($request->new_password);
+            $user->save();
+
+            // Optionally, revoke all tokens to force re-login everywhere
+            // $user->tokens()->delete();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Password changed successfully'
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to change password',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
