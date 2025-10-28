@@ -53,6 +53,30 @@ export default function Home() {
                 </motion.div>
             </section>
 
+             <section id="products" className="min-h-screen w-full bg-gradient-to-b px-6 md:px-32 from-[#145956] to-[#0E3B3E] items-center justify-center flex flex-col py-12">
+                {/* Products Section */}
+                <motion.div
+                    className="w-full text-white"
+                    initial={{ opacity: 0, y: 50 }}
+                    whileInView={{ opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }}
+                >
+                    <h2 className="text-2xl md:text-3xl font-bold drop-shadow-lg text-center mb-8">Our Products</h2>
+                    <p className="text-center mb-8">Explore our range of high-quality pet care products designed to keep your furry friends happy and healthy.</p>
+
+                    <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-6 place-content-center place-items-center justify-center">
+                        {productsList.map((product, idx) => (
+                            <Product
+                                key={idx}
+                                img={product.img}
+                                title={product.title}
+                                description={product.description}
+                                price={product.price}
+                            />
+                        ))}
+                    </div>
+                </motion.div>
+            </section>
+
 
             <section id="about" className="min-h-screen w-full text-center flex flex-col justify-center items-center bg-gradient-to-b px-6 md:px-32 from-[#145956] to-[#0E3B3E]">
                 {/* About Section */}
@@ -109,29 +133,6 @@ export default function Home() {
                 </motion.div>
             </section>
             
-            <section id="products" className="min-h-screen w-full bg-gradient-to-b px-6 md:px-32 from-[#145956] to-[#0E3B3E] items-center justify-center flex flex-col py-12">
-                {/* Products Section */}
-                <motion.div
-                    className="w-full text-white"
-                    initial={{ opacity: 0, y: 50 }}
-                    whileInView={{ opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } }}
-                >
-                    <h2 className="text-2xl md:text-3xl font-bold drop-shadow-lg text-center mb-8">Our Products</h2>
-                    <p className="text-center mb-8">Explore our range of high-quality pet care products designed to keep your furry friends happy and healthy.</p>
-
-                    <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-6 place-content-center place-items-center justify-center">
-                        {productsList.map((product, idx) => (
-                            <Product
-                                key={idx}
-                                img={product.img}
-                                title={product.title}
-                                description={product.description}
-                                price={product.price}
-                            />
-                        ))}
-                    </div>
-                </motion.div>
-            </section>
 
             <section id="contact" className="min-h-screen mt-11 w-full text-center flex flex-col justify-center items-center bg-gradient-to-b px-6 md:px-32 from-[#fbfbfb] to-black]">
                 {/* Contact Section */}
