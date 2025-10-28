@@ -76,22 +76,22 @@ class UserController extends Controller
         $user = User::findOrFail($id);
 
         if (! $user) {
-            return redirect(config('app.frontend_url', 'http://localhost:3000') . '/email/verified?status=user_not_found');
+            return redirect(config('app.frontend_url') . '/email/verified?status=user_not_found');
         }
 
         if (! hash_equals((string) $request->route('hash'), sha1($user->getEmailForVerification()))) {
-            return redirect(config('app.frontend_url', 'http://localhost:3000') . '/email/verified?status=invalid_link');
+            return redirect(config('app.frontend_url') . '/email/verified?status=invalid_link');
         }
 
 
         if ($user->hasVerifiedEmail()) {
-            return redirect(config('app.frontend_url', 'http://localhost:3000') . '/email/verified?status=already_verified');
+            return redirect(config('app.frontend_url') . '/email/verified?status=already_verified');
         }
 
         $user->markEmailAsVerified();
 
 
-        return redirect(config('app.frontend_url', 'http://localhost:3000') . '/email/verified?status=success');
+        return redirect(config('app.frontend_url') . '/email/verified?status=success');
     }
 
     public function resendEmailVerification(Request $request) {
