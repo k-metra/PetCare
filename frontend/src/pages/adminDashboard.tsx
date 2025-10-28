@@ -708,10 +708,7 @@ const AdminDashboard: React.FC = () => {
         return;
       }
       
-      if (walkInData.services.includes('Pet Grooming') && walkInData.pets.some(pet => !pet.groomingDetails)) {
-        alert('Please select grooming packages for all pets when Pet Grooming service is selected');
-        return;
-      }
+      // Note: Grooming and dental care are optional per pet, no validation needed
 
       const token = localStorage.getItem('token');
       if (!token) {
@@ -740,11 +737,26 @@ const AdminDashboard: React.FC = () => {
             };
           }
           
+          let formattedDentalCareDetails = null;
+          
+          // Transform dental care details to match backend expected structure
+          if (pet.dentalCareDetails) {
+            formattedDentalCareDetails = {
+              procedure: pet.dentalCareDetails.procedure,
+              size: pet.dentalCareDetails.size,
+              procedurePrice: pet.dentalCareDetails.procedurePrice,
+              anesthetic: pet.dentalCareDetails.anesthetic,
+              anestheticPrice: pet.dentalCareDetails.anestheticPrice,
+              totalPrice: pet.dentalCareDetails.totalPrice
+            };
+          }
+          
           return {
             type: pet.type,
             breed: pet.breed,
             name: pet.name,
-            groomingDetails: formattedGroomingDetails
+            groomingDetails: formattedGroomingDetails,
+            dentalCareDetails: formattedDentalCareDetails
           };
         }),
         services: walkInData.services,
@@ -2183,9 +2195,22 @@ const AdminDashboard: React.FC = () => {
                         </label>
                         <input
                           type="time"
-                          value={walkInData.selectedTime}
+                          value={(() => {
+                            // Convert 12-hour format back to 24-hour for input display
+                            if (!walkInData.selectedTime) return '';
+                            const time12 = walkInData.selectedTime;
+                            if (time12.includes('AM') || time12.includes('PM')) {
+                              const [time, period] = time12.split(' ');
+                              const [hours, minutes] = time.split(':');
+                              let hour24 = parseInt(hours);
+                              if (period === 'PM' && hour24 !== 12) hour24 += 12;
+                              if (period === 'AM' && hour24 === 12) hour24 = 0;
+                              return `${hour24.toString().padStart(2, '0')}:${minutes}`;
+                            }
+                            return time12; // Return as-is if already in 24-hour format
+                          })()}
                           onChange={(e) => {
-                            // Convert 24-hour format to 12-hour format for display
+                            // Store time in 12-hour format for consistency
                             const time24 = e.target.value;
                             if (time24) {
                               const [hours, minutes] = time24.split(':');
@@ -2211,6 +2236,12 @@ const AdminDashboard: React.FC = () => {
                   {/* Services Selection */}
                   <div>
                     <h3 className="text-lg font-semibold text-gray-800 mb-4">Services</h3>
+                    <div className="mb-4 bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <p className="text-sm text-blue-700">
+                        <strong>Note:</strong> After selecting services below, you can choose which specific pets receive each service. 
+                        Not all pets need to have every selected service.
+                      </p>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {['Pet Grooming', 'Health Checkups', 'Vaccination', 'Dental Care'].map((service) => (
                         <label
@@ -2342,17 +2373,33 @@ const AdminDashboard: React.FC = () => {
                               <div className="flex items-center justify-between mb-3">
                                 <h5 className="text-sm font-semibold text-gray-700">
                                   Pet Grooming Details for {pet.name || `Pet #${index + 1}`}
+                                  <span className="text-xs text-gray-500 font-normal ml-2">(Optional)</span>
                                 </h5>
-                                <button
-                                  type="button"
-                                  onClick={() => handleWalkInGroomingModalOpen(index)}
-                                  className="text-sm bg-teal-100 text-teal-700 px-3 py-1 rounded-full hover:bg-teal-200 transition-colors"
-                                >
-                                  {pet.groomingDetails ? 'Edit Package' : 'Select Package'}
-                                </button>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleWalkInGroomingModalOpen(index)}
+                                    className="text-sm bg-teal-100 text-teal-700 px-3 py-1 rounded-full hover:bg-teal-200 transition-colors"
+                                  >
+                                    {pet.groomingDetails ? 'Edit Package' : 'Select Package'}
+                                  </button>
+                                  {pet.groomingDetails && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const updatedPets = [...walkInData.pets];
+                                        updatedPets[index] = { ...updatedPets[index], groomingDetails: undefined };
+                                        setWalkInData(prev => ({ ...prev, pets: updatedPets }));
+                                      }}
+                                      className="text-sm bg-red-100 text-red-700 px-3 py-1 rounded-full hover:bg-red-200 transition-colors"
+                                    >
+                                      Remove
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                               
-                              {pet.groomingDetails && (
+                              {pet.groomingDetails ? (
                                 <div className="bg-gray-50 p-3 rounded-lg">
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
                                     <div>
@@ -2369,6 +2416,10 @@ const AdminDashboard: React.FC = () => {
                                     </div>
                                   </div>
                                 </div>
+                              ) : (
+                                <div className="bg-gray-50 p-3 rounded-lg text-center">
+                                  <p className="text-sm text-gray-500">No grooming service selected for this pet</p>
+                                </div>
                               )}
                             </div>
                           )}
@@ -2379,17 +2430,33 @@ const AdminDashboard: React.FC = () => {
                               <div className="flex items-center justify-between mb-3">
                                 <h5 className="text-sm font-semibold text-gray-700">
                                   Dental Care Details for {pet.name || `Pet #${index + 1}`}
+                                  <span className="text-xs text-gray-500 font-normal ml-2">(Optional)</span>
                                 </h5>
-                                <button
-                                  type="button"
-                                  onClick={() => handleWalkInDentalCareModalOpen(index)}
-                                  className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded-full hover:bg-blue-200 transition-colors"
-                                >
-                                  {pet.dentalCareDetails ? 'Edit Procedure' : 'Select Procedure'}
-                                </button>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleWalkInDentalCareModalOpen(index)}
+                                    className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded-full hover:bg-blue-200 transition-colors"
+                                  >
+                                    {pet.dentalCareDetails ? 'Edit Procedure' : 'Select Procedure'}
+                                  </button>
+                                  {pet.dentalCareDetails && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const updatedPets = [...walkInData.pets];
+                                        updatedPets[index] = { ...updatedPets[index], dentalCareDetails: undefined };
+                                        setWalkInData(prev => ({ ...prev, pets: updatedPets }));
+                                      }}
+                                      className="text-sm bg-red-100 text-red-700 px-3 py-1 rounded-full hover:bg-red-200 transition-colors"
+                                    >
+                                      Remove
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                               
-                              {pet.dentalCareDetails && (
+                              {pet.dentalCareDetails ? (
                                 <div className="bg-blue-50 p-3 rounded-lg">
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mb-3">
                                     <div>
@@ -2415,6 +2482,10 @@ const AdminDashboard: React.FC = () => {
                                       <p>Anesthetic: ₱{pet.dentalCareDetails.anestheticPrice}</p>
                                     </div>
                                   </div>
+                                </div>
+                              ) : (
+                                <div className="bg-blue-50 p-3 rounded-lg text-center">
+                                  <p className="text-sm text-gray-500">No dental care service selected for this pet</p>
                                 </div>
                               )}
                             </div>
@@ -2498,6 +2569,55 @@ const AdminDashboard: React.FC = () => {
                           <span className="text-blue-600">
                             ₱{walkInData.pets.reduce((total, pet) => {
                               return total + (pet.dentalCareDetails?.totalPrice || 0);
+                            }, 0)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Grand Total Summary */}
+                  {((walkInData.services.includes('Pet Grooming') && walkInData.pets.some(pet => pet.groomingDetails)) || 
+                    (walkInData.services.includes('Dental Care') && walkInData.pets.some(pet => pet.dentalCareDetails))) && (
+                    <div className="bg-gray-100 p-4 rounded-lg border-2 border-gray-300">
+                      <h3 className="font-semibold text-gray-800 mb-3">Appointment Summary</h3>
+                      
+                      {/* Services Base Cost */}
+                      <div className="space-y-2 mb-3">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Services Total:</span>
+                          <span className="font-medium">₱0</span>
+                        </div>
+                        
+                        {walkInData.services.includes('Pet Grooming') && walkInData.pets.some(pet => pet.groomingDetails) && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Grooming Total:</span>
+                            <span className="font-medium text-teal-600">
+                              ₱{walkInData.pets.reduce((total, pet) => {
+                                return total + (pet.groomingDetails?.price || 0);
+                              }, 0)}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {walkInData.services.includes('Dental Care') && walkInData.pets.some(pet => pet.dentalCareDetails) && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Dental Care Total:</span>
+                            <span className="font-medium text-blue-600">
+                              ₱{walkInData.pets.reduce((total, pet) => {
+                                return total + (pet.dentalCareDetails?.totalPrice || 0);
+                              }, 0)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="pt-3 border-t border-gray-400">
+                        <div className="flex justify-between items-center text-xl font-bold">
+                          <span className="text-gray-900">Grand Total:</span>
+                          <span className="text-indigo-600">
+                            ₱{walkInData.pets.reduce((total, pet) => {
+                              return total + (pet.groomingDetails?.price || 0) + (pet.dentalCareDetails?.totalPrice || 0);
                             }, 0)}
                           </span>
                         </div>
