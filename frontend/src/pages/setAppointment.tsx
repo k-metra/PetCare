@@ -19,6 +19,14 @@ interface Pet {
     price: number;
     isPackage: boolean;
   };
+  dentalCareDetails?: {
+    procedure: string;
+    size: string;
+    procedurePrice: number;
+    anesthetic: string;
+    anestheticPrice: number;
+    totalPrice: number;
+  };
 }
 
 interface AppointmentData {
@@ -123,6 +131,55 @@ const SetAppointment: React.FC = () => {
     }
   };
 
+  // Dental care procedures and anesthetics data
+  const dentalCareProcedures = {
+    'Dental Fistula / Extraction': {
+      '<5kg': 2000,
+      '5.1-8.5kg': 2500,
+      '8.6-17kg': 3000,
+      '17.1-35kg': 4000,
+      '35.1+': 6000
+    },
+    'Dental extraction of Deciduous + Local': {
+      '<5kg': 1000,
+      '5.1-8.5kg': 1500,
+      '8.6-17kg': 2500,
+      '17.1-35kg': 3000,
+      '35.1+': 4000
+    },
+    'Dental Extraction of loosened tooth': {
+      '<5kg': 0,
+      '5.1-8.5kg': 0,
+      '8.6-17kg': 0,
+      '17.1-35kg': 0,
+      '35.1+': 500
+    }
+  };
+
+  const dentalCareAnesthetics = {
+    'Local': {
+      '<5kg': 500,
+      '5.1-8.5kg': 600,
+      '8.6-17kg': 700,
+      '17.1-35kg': 800,
+      '35.1+': 1000
+    },
+    'Sedative': {
+      '<5kg': 700,
+      '5.1-8.5kg': 850,
+      '8.6-17kg': 1000,
+      '17.1-35kg': 1200,
+      '35.1+': 1500
+    },
+    'General': {
+      '<5kg': 1800,
+      '5.1-8.5kg': 2200,
+      '8.6-17kg': 2600,
+      '17.1-35kg': 2800,
+      '35.1+': 3000
+    }
+  };
+
   const individualServices = {
     'Sanitary Grooming (No Bath)': {
       'X-Small': 400,
@@ -181,6 +238,9 @@ const SetAppointment: React.FC = () => {
   // Modal state
   const [showGroomingModal, setShowGroomingModal] = useState(false);
   const [currentPetForGrooming, setCurrentPetForGrooming] = useState<number | null>(null);
+  const [showDentalCareModal, setShowDentalCareModal] = useState(false);
+  const [currentPetForDentalCare, setCurrentPetForDentalCare] = useState<number | null>(null);
+  const [selectedDentalProcedure, setSelectedDentalProcedure] = useState<{procedure: string, size: string, price: number} | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmModalData, setConfirmModalData] = useState<{
     message: string;
@@ -275,6 +335,50 @@ const SetAppointment: React.FC = () => {
     setCurrentPetForGrooming(null);
   };
 
+  // Dental Care Functions
+  const updatePetDentalCare = (petIndex: number, procedure: string, size: string, procedurePrice: number, anesthetic: string, anestheticPrice: number) => {
+    const updatedPets = [...appointmentData.pets];
+    updatedPets[petIndex] = {
+      ...updatedPets[petIndex],
+      dentalCareDetails: { procedure, size, procedurePrice, anesthetic, anestheticPrice, totalPrice: procedurePrice + anestheticPrice }
+    };
+    setAppointmentData(prev => ({ ...prev, pets: updatedPets }));
+  };
+
+  const handleDentalCareModalOpen = (petIndex: number) => {
+    setCurrentPetForDentalCare(petIndex);
+    setShowDentalCareModal(true);
+    setSelectedDentalProcedure(null);
+  };
+
+  const handleDentalCareModalClose = () => {
+    setShowDentalCareModal(false);
+    setSelectedDentalProcedure(null);
+    
+    // Check if there are more pets that need dental care configuration
+    if (currentPetForDentalCare !== null) {
+      const nextPetIndex = appointmentData.pets.findIndex((pet, index) => 
+        index > currentPetForDentalCare && !pet.dentalCareDetails
+      );
+      
+      if (nextPetIndex !== -1) {
+        // Ask user if they want to configure dental care for the next pet
+        setTimeout(() => {
+          const nextPetName = appointmentData.pets[nextPetIndex].name || `Pet #${nextPetIndex + 1}`;
+          showCustomConfirm(
+            `Would you like to select dental care procedure for ${nextPetName}?`,
+            () => {
+              setCurrentPetForDentalCare(nextPetIndex);
+              setShowDentalCareModal(true);
+            }
+          );
+        }, 100);
+      }
+    }
+    
+    setCurrentPetForDentalCare(null);
+  };
+
   const handleServiceToggle = (service: string) => {
     const currentServices = appointmentData.services;
     
@@ -299,6 +403,29 @@ const SetAppointment: React.FC = () => {
         // Show modal for first pet
         if (appointmentData.pets.length > 0) {
           handleGroomingModalOpen(0);
+        }
+      }
+    } else if (service === 'Dental Care') {
+      if (currentServices.includes(service)) {
+        // Remove dental care service and clear all pet dental care details
+        const updatedServices = currentServices.filter(s => s !== service);
+        const updatedPets = appointmentData.pets.map(pet => ({
+          ...pet,
+          dentalCareDetails: undefined
+        }));
+        setAppointmentData(prev => ({ 
+          ...prev, 
+          services: updatedServices,
+          pets: updatedPets
+        }));
+      } else {
+        // Add dental care service and show modal for first pet
+        const updatedServices = [...currentServices, service];
+        setAppointmentData(prev => ({ ...prev, services: updatedServices }));
+        
+        // Show modal for first pet
+        if (appointmentData.pets.length > 0) {
+          handleDentalCareModalOpen(0);
         }
       }
     } else {
@@ -380,12 +507,27 @@ const SetAppointment: React.FC = () => {
               }]
             };
           }
+
+          let formattedDentalCareDetails = null;
+          
+          // Transform dental care details to match backend expected structure
+          if (pet.dentalCareDetails) {
+            formattedDentalCareDetails = {
+              procedure: pet.dentalCareDetails.procedure,
+              size: pet.dentalCareDetails.size,
+              procedurePrice: pet.dentalCareDetails.procedurePrice,
+              anesthetic: pet.dentalCareDetails.anesthetic,
+              anestheticPrice: pet.dentalCareDetails.anestheticPrice,
+              totalPrice: pet.dentalCareDetails.totalPrice
+            };
+          }
           
           return {
             type: pet.type,
             breed: pet.breed,
             name: pet.name,
-            groomingDetails: formattedGroomingDetails
+            groomingDetails: formattedGroomingDetails,
+            dentalCareDetails: formattedDentalCareDetails
           };
         }),
         services: appointmentData.services,
@@ -692,6 +834,53 @@ const SetAppointment: React.FC = () => {
                         )}
                       </div>
                     )}
+
+                    {/* Dental Care Configuration */}
+                    {appointmentData.services.includes('Dental Care') && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-sm font-semibold text-gray-700">
+                            Dental Care Details for {pet.name || `Pet #${index + 1}`}
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => handleDentalCareModalOpen(index)}
+                            className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded-full hover:bg-blue-200 transition-colors"
+                          >
+                            {pet.dentalCareDetails ? 'Edit Procedure' : 'Select Procedure'}
+                          </button>
+                        </div>
+                        
+                        {pet.dentalCareDetails && (
+                          <div className="bg-blue-50 p-3 rounded-lg">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mb-3">
+                              <div>
+                                <span className="font-medium text-blue-600">Procedure:</span>
+                                <p className="text-gray-800">{pet.dentalCareDetails.procedure}</p>
+                              </div>
+                              <div>
+                                <span className="font-medium text-blue-600">Pet Size:</span>
+                                <p className="text-gray-800">{pet.dentalCareDetails.size}</p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                              <div>
+                                <span className="font-medium text-blue-600">Anesthetic:</span>
+                                <p className="text-gray-800">{pet.dentalCareDetails.anesthetic}</p>
+                              </div>
+                              <div>
+                                <span className="font-medium text-blue-600">Total Price:</span>
+                                <p className="text-gray-800 font-semibold">₱{pet.dentalCareDetails.totalPrice}</p>
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                <p>Procedure: ₱{pet.dentalCareDetails.procedurePrice}</p>
+                                <p>Anesthetic: ₱{pet.dentalCareDetails.anestheticPrice}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -752,6 +941,47 @@ const SetAppointment: React.FC = () => {
                     <span className="text-teal-600">
                       ₱{appointmentData.pets.reduce((total, pet) => {
                         return total + (pet.groomingDetails?.price || 0);
+                      }, 0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Dental Care Cost Summary */}
+            {appointmentData.services.includes('Dental Care') && appointmentData.pets.some(pet => pet.dentalCareDetails) && (
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h3 className="font-semibold text-gray-800 mb-3">Dental Care Services Summary</h3>
+                {appointmentData.pets.map((pet, index) => {
+                  if (!pet.dentalCareDetails) return null;
+                  
+                  return (
+                    <div key={index} className="mb-3 last:mb-0">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="font-medium text-gray-700">
+                          {pet.name || `Pet #${index + 1}`}
+                        </span>
+                        <span className="text-blue-600 font-semibold">₱{pet.dentalCareDetails.totalPrice}</span>
+                      </div>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <div className="ml-4 flex justify-between">
+                          <span>{pet.dentalCareDetails.procedure} ({pet.dentalCareDetails.size})</span>
+                          <span>₱{pet.dentalCareDetails.procedurePrice}</span>
+                        </div>
+                        <div className="ml-4 flex justify-between">
+                          <span>{pet.dentalCareDetails.anesthetic} Anesthetic</span>
+                          <span>₱{pet.dentalCareDetails.anestheticPrice}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="pt-3 border-t border-blue-300 mt-3">
+                  <div className="flex justify-between items-center font-semibold text-lg">
+                    <span className="text-gray-800">Total Dental Care Cost:</span>
+                    <span className="text-blue-600">
+                      ₱{appointmentData.pets.reduce((total, pet) => {
+                        return total + (pet.dentalCareDetails?.totalPrice || 0);
                       }, 0)}
                     </span>
                   </div>
@@ -864,6 +1094,135 @@ const SetAppointment: React.FC = () => {
               </p>
               <button
                 onClick={handleGroomingModalClose}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Dental Care Selection Modal */}
+    {showDentalCareModal && currentPetForDentalCare !== null && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+          {/* Modal Header */}
+          <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-gray-900">
+                Select Dental Procedure for {appointmentData.pets[currentPetForDentalCare]?.name || `Pet #${currentPetForDentalCare + 1}`}
+              </h3>
+              <button
+                onClick={handleDentalCareModalClose}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
+          {/* Modal Content */}
+          <div className="p-6">
+            {!selectedDentalProcedure ? (
+              /* Step 1: Select Procedure */
+              <div>
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">Step 1: Select Dental Procedure</h4>
+                <p className="text-sm text-gray-600 mb-4">Choose a procedure based on your pet's weight category</p>
+                <div className="space-y-6">
+                  {Object.entries(dentalCareProcedures).map(([procedureName, sizes]) => (
+                    <div key={procedureName} className="border border-gray-200 rounded-lg p-4">
+                      <h5 className="font-medium text-gray-700 mb-3">{procedureName}</h5>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                        {Object.entries(sizes).map(([size, price]) => (
+                          <button
+                            key={`${procedureName}-${size}`}
+                            type="button"
+                            onClick={() => setSelectedDentalProcedure({procedure: procedureName, size, price})}
+                            className="p-3 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors text-center"
+                          >
+                            <div className="font-medium text-gray-800">{size}</div>
+                            <div className="text-blue-600 font-semibold">
+                              {price === 0 ? 'Free' : `₱${price}`}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* Step 2: Select Anesthetic */
+              <div>
+                <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                  <h4 className="text-lg font-semibold text-blue-800 mb-2">Selected Procedure</h4>
+                  <div className="flex justify-between items-center">
+                    <span className="text-blue-700">{selectedDentalProcedure.procedure} ({selectedDentalProcedure.size})</span>
+                    <span className="font-semibold text-blue-600">
+                      {selectedDentalProcedure.price === 0 ? 'Free' : `₱${selectedDentalProcedure.price}`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDentalProcedure(null)}
+                    className="text-sm text-blue-600 hover:text-blue-800 mt-2"
+                  >
+                    ← Change Procedure
+                  </button>
+                </div>
+
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">Step 2: Select Anesthetic Type</h4>
+                <p className="text-sm text-gray-600 mb-4">Choose the appropriate anesthetic for your pet</p>
+                <div className="space-y-6">
+                  {Object.entries(dentalCareAnesthetics).map(([anestheticType, sizes]) => (
+                    <div key={anestheticType} className="border border-gray-200 rounded-lg p-4">
+                      <h5 className="font-medium text-gray-700 mb-3">{anestheticType} Anesthetic</h5>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                        {Object.entries(sizes).map(([size, price]) => (
+                          <button
+                            key={`${anestheticType}-${size}`}
+                            type="button"
+                            onClick={() => {
+                              updatePetDentalCare(
+                                currentPetForDentalCare,
+                                selectedDentalProcedure.procedure,
+                                selectedDentalProcedure.size,
+                                selectedDentalProcedure.price,
+                                anestheticType,
+                                price
+                              );
+                              handleDentalCareModalClose();
+                            }}
+                            className="p-3 border border-gray-300 rounded-lg hover:bg-green-50 hover:border-green-300 transition-colors text-center"
+                          >
+                            <div className="font-medium text-gray-800">{size}</div>
+                            <div className="text-green-600 font-semibold">₱{price}</div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Total: ₱{selectedDentalProcedure.price + price}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Modal Footer */}
+          <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-gray-600">
+                {!selectedDentalProcedure ? 
+                  'Select a dental procedure to continue' : 
+                  'Select an anesthetic type to complete the configuration'
+                }
+              </p>
+              <button
+                onClick={handleDentalCareModalClose}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
               >
                 Cancel

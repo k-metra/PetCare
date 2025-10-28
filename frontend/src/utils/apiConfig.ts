@@ -36,6 +36,11 @@ export const apiUrl = {
   adminRecentAppointments: () => getApiUrl('api/admin/recent-appointments'),
   adminWalkInAppointments: () => getApiUrl('api/admin/walk-in-appointments'),
   adminCustomers: () => getApiUrl('api/admin/customers'),
+  
+  // Notifications
+  adminNotifications: () => getApiUrl('api/admin/notifications'),
+  adminNotificationsStream: () => getApiUrl('api/admin/notifications/stream'),
+  adminNotificationsClear: () => getApiUrl('api/admin/notifications'),
 };
 
 export default API_BASE_URL;
