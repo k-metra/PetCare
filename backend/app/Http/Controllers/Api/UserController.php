@@ -8,6 +8,11 @@ use Illuminate\Http\Request;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
@@ -94,6 +99,27 @@ class UserController extends Controller
         return response()->json(['status' => true, 'message' => 'Verification link sent! Please check your email.'], 200);
     }
 
+    public function resendEmailVerificationByEmail(Request $request) {
+        $validatedData = $request->validate([
+            'email' => 'required|string|email',
+        ]);
+
+        $user = User::where('email', $validatedData['email'])->first();
+
+        if (!$user) {
+            $response = response()->json(['status' => false, 'message' => 'User not found.'], 404);
+        } else if ($user->hasVerifiedEmail()) {
+            $response = response()->json(['status' => false, 'message' => 'Email is already verified.'], 400);
+        } else {
+            $user->sendEmailVerificationNotification();
+            $response = response()->json(['status' => true, 'message' => 'Verification link sent! Please check your email.'], 200);
+        }
+
+        return $response->header('Access-Control-Allow-Origin', '*')
+                      ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                      ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    }
+
     /**
      * Logout user and revoke tokens
      */
@@ -151,6 +177,136 @@ class UserController extends Controller
                 'message' => 'Failed to get user info',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Send password reset link to user's email
+     */
+    public function forgotPassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email|exists:users,email',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+            }
+
+            // Send password reset link
+            $status = Password::sendResetLink(
+                $request->only('email')
+            );
+
+            if ($status === Password::RESET_LINK_SENT) {
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Password reset link sent to your email address.'
+                ], 200)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+            }
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Unable to send password reset link. Please try again.'
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to send password reset link',
+                'error' => $e->getMessage()
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        }
+    }
+
+    /**
+     * Reset user's password
+     */
+    public function resetPassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'token' => 'required',
+                'email' => 'required|email',
+                'password' => 'required|min:8|confirmed',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+            }
+
+            // Reset the password
+            $status = Password::reset(
+                $request->only('email', 'password', 'password_confirmation', 'token'),
+                function ($user, $password) {
+                    $user->forceFill([
+                        'password' => Hash::make($password)
+                    ])->setRememberToken(Str::random(60));
+
+                    $user->save();
+
+                    event(new PasswordReset($user));
+                }
+            );
+
+            if ($status === Password::PASSWORD_RESET) {
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Password has been successfully reset. You can now log in with your new password.'
+                ], 200)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+            }
+
+            // Handle different error cases
+            $message = match($status) {
+                Password::INVALID_TOKEN => 'The password reset token is invalid or has expired.',
+                Password::INVALID_USER => 'We could not find a user with that email address.',
+                default => 'Unable to reset password. Please try again.'
+            };
+
+            return response()->json([
+                'status' => false,
+                'message' => $message
+            ], 400)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to reset password',
+                'error' => $e->getMessage()
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
         }
     }
 }
