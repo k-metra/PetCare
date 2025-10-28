@@ -470,10 +470,7 @@ const SetAppointment: React.FC = () => {
       showNotification('Please specify the breed for all pets.', 'error');
       return;
     }
-    if (appointmentData.services.includes('Pet Grooming') && appointmentData.pets.some(pet => !pet.groomingDetails)) {
-      showNotification('Please select grooming packages for all pets when Pet Grooming service is selected.', 'error');
-      return;
-    }
+    // Removed mandatory grooming/dental care validation - services are now optional per pet
     if (appointmentData.services.length === 0) {
       showNotification('Please select at least one service.', 'error');
       return;
@@ -802,9 +799,12 @@ const SetAppointment: React.FC = () => {
                     {appointmentData.services.includes('Pet Grooming') && (
                       <div className="mt-4 pt-4 border-t border-gray-200">
                         <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-sm font-semibold text-gray-700">
-                            Pet Grooming Details for {pet.name || `Pet #${index + 1}`}
-                          </h4>
+                          <div>
+                            <h4 className="text-sm font-semibold text-gray-700">
+                              Pet Grooming Details for {pet.name || `Pet #${index + 1}`}
+                            </h4>
+                            <p className="text-xs text-gray-500 mt-1">Optional - You can skip grooming for individual pets</p>
+                          </div>
                           <button
                             type="button"
                             onClick={() => handleGroomingModalOpen(index)}
@@ -830,6 +830,17 @@ const SetAppointment: React.FC = () => {
                                 <p className="text-gray-800 font-semibold">₱{pet.groomingDetails.price}</p>
                               </div>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updatedPets = [...appointmentData.pets];
+                                updatedPets[index].groomingDetails = undefined;
+                                setAppointmentData(prev => ({ ...prev, pets: updatedPets }));
+                              }}
+                              className="mt-2 text-xs text-red-600 hover:text-red-800 transition-colors"
+                            >
+                              Remove Grooming Service
+                            </button>
                           </div>
                         )}
                       </div>
@@ -839,9 +850,12 @@ const SetAppointment: React.FC = () => {
                     {appointmentData.services.includes('Dental Care') && (
                       <div className="mt-4 pt-4 border-t border-gray-200">
                         <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-sm font-semibold text-gray-700">
-                            Dental Care Details for {pet.name || `Pet #${index + 1}`}
-                          </h4>
+                          <div>
+                            <h4 className="text-sm font-semibold text-gray-700">
+                              Dental Care Details for {pet.name || `Pet #${index + 1}`}
+                            </h4>
+                            <p className="text-xs text-gray-500 mt-1">Optional - You can skip dental care for individual pets</p>
+                          </div>
                           <button
                             type="button"
                             onClick={() => handleDentalCareModalOpen(index)}
@@ -877,6 +891,17 @@ const SetAppointment: React.FC = () => {
                                 <p>Anesthetic: ₱{pet.dentalCareDetails.anestheticPrice}</p>
                               </div>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updatedPets = [...appointmentData.pets];
+                                updatedPets[index].dentalCareDetails = undefined;
+                                setAppointmentData(prev => ({ ...prev, pets: updatedPets }));
+                              }}
+                              className="mt-2 text-xs text-red-600 hover:text-red-800 transition-colors"
+                            >
+                              Remove Dental Care Service
+                            </button>
                           </div>
                         )}
                       </div>
@@ -982,6 +1007,55 @@ const SetAppointment: React.FC = () => {
                     <span className="text-blue-600">
                       ₱{appointmentData.pets.reduce((total, pet) => {
                         return total + (pet.dentalCareDetails?.totalPrice || 0);
+                      }, 0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Grand Total Summary */}
+            {(appointmentData.services.includes('Pet Grooming') && appointmentData.pets.some(pet => pet.groomingDetails)) || 
+             (appointmentData.services.includes('Dental Care') && appointmentData.pets.some(pet => pet.dentalCareDetails)) && (
+              <div className="bg-gray-100 p-4 rounded-lg border-2 border-gray-300">
+                <h3 className="font-semibold text-gray-800 mb-3">Appointment Summary</h3>
+                
+                {/* Services Base Cost */}
+                <div className="space-y-2 mb-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Services Total:</span>
+                    <span className="font-medium">₱0</span>
+                  </div>
+                  
+                  {appointmentData.services.includes('Pet Grooming') && appointmentData.pets.some(pet => pet.groomingDetails) && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Grooming Total:</span>
+                      <span className="font-medium text-teal-600">
+                        ₱{appointmentData.pets.reduce((total, pet) => {
+                          return total + (pet.groomingDetails?.price || 0);
+                        }, 0)}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {appointmentData.services.includes('Dental Care') && appointmentData.pets.some(pet => pet.dentalCareDetails) && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Dental Care Total:</span>
+                      <span className="font-medium text-blue-600">
+                        ₱{appointmentData.pets.reduce((total, pet) => {
+                          return total + (pet.dentalCareDetails?.totalPrice || 0);
+                        }, 0)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="pt-3 border-t border-gray-400">
+                  <div className="flex justify-between items-center text-xl font-bold">
+                    <span className="text-gray-900">Grand Total:</span>
+                    <span className="text-indigo-600">
+                      ₱{appointmentData.pets.reduce((total, pet) => {
+                        return total + (pet.groomingDetails?.price || 0) + (pet.dentalCareDetails?.totalPrice || 0);
                       }, 0)}
                     </span>
                   </div>
