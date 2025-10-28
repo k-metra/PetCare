@@ -21,10 +21,10 @@ return [
 
     'allowed_origins' => array_filter([
         env('FRONTEND_URL', 'http://localhost:3000'),
-        'https://pet-care-pink-six.vercel.app', 
-        'https://pet-care-pwi29pk2b-k-metras-projects.vercel.app',
-        'http://localhost:3000',
-        'http://127.0.0.1:3000'
+        env('ADDITIONAL_FRONTEND_URL_1'),
+        env('ADDITIONAL_FRONTEND_URL_2'),
+        env('ADDITIONAL_FRONTEND_URL_3'),
+        env('ADDITIONAL_FRONTEND_URL_4')
     ]),
 
     'allowed_origins_patterns' => [],
