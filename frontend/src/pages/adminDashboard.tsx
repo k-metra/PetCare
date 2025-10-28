@@ -65,6 +65,28 @@ interface User {
   name: string;
   email: string;
   role: string;
+  phone_number?: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
+  description?: string;
+  products_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Product {
+  id: number;
+  name: string;
+  description?: string;
+  price: number;
+  quantity: number;
+  category_id?: number;
+  category?: Category;
+  created_at: string;
+  updated_at: string;
 }
 
 interface Appointment {
@@ -173,13 +195,58 @@ const AdminDashboard: React.FC = () => {
   const [showMedicalModal, setShowMedicalModal] = useState(false);
   const [appointmentToComplete, setAppointmentToComplete] = useState<Appointment | null>(null);
   const [medicalExam, setMedicalExam] = useState<MedicalExamination | null>(null);
-  const [activeTab, setActiveTab] = useState<'appointments' | 'walkIn' | 'customers' | 'petRecords' | 'analytics'>('appointments');
+  
+  // Appointment completion inventory state
+  const [selectedInventoryItems, setSelectedInventoryItems] = useState<Array<{
+    product: Product;
+    quantity: number;
+  }>>([]);
+  const [inventorySearchTerm, setInventorySearchTerm] = useState('');
+  const [inventoryFilterCategory, setInventoryFilterCategory] = useState<string>('');
+  
+  const [activeTab, setActiveTab] = useState<'appointments' | 'walkIn' | 'customers' | 'petRecords' | 'analytics' | 'inventory'>('appointments');
   const [petRecords, setPetRecords] = useState<any[]>([]);
   const [recordsSearchTerm, setRecordsSearchTerm] = useState('');
   const [selectedPetRecord, setSelectedPetRecord] = useState<any | null>(null);
   const [showPetRecordModal, setShowPetRecordModal] = useState(false);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [recentRecords, setRecentRecords] = useState<Appointment[]>([]);
+
+  // Inventory Management State
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventorySubTab, setInventorySubTab] = useState<'products' | 'categories'>('products');
+  const [analyticsSubTab, setAnalyticsSubTab] = useState<'appointments' | 'income'>('appointments');
+  const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [productFormData, setProductFormData] = useState({
+    name: '',
+    description: '',
+    price: '',
+    quantity: '',
+    category_id: ''
+  });
+  const [categoryFormData, setCategoryFormData] = useState({
+    name: '',
+    description: ''
+  });
+
+  // Notification state
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: 'success' | 'error';
+  } | null>(null);
+
+  // Simple notification function
+  const showNotification = (message: string, type: 'success' | 'error') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 5000); // Auto-hide after 5 seconds
+  };
 
   // Walk-in appointment state
   const [walkInLoading, setWalkInLoading] = useState(false);
@@ -194,6 +261,11 @@ const AdminDashboard: React.FC = () => {
   const [walkInPetCount, setWalkInPetCount] = useState(1);
   const [showWalkInGroomingModal, setShowWalkInGroomingModal] = useState(false);
   const [currentWalkInPetForGrooming, setCurrentWalkInPetForGrooming] = useState<number | null>(null);
+  
+  // Walk-in dental care state
+  const [showWalkInDentalCareModal, setShowWalkInDentalCareModal] = useState(false);
+  const [currentWalkInPetForDentalCare, setCurrentWalkInPetForDentalCare] = useState<number | null>(null);
+  const [selectedWalkInDentalProcedure, setSelectedWalkInDentalProcedure] = useState<{procedure: string, size: string, price: number} | null>(null);
 
   // Reschedule appointment state
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
@@ -312,6 +384,55 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  // Dental care procedures and anesthetics data
+  const dentalCareProcedures = {
+    'Dental Fistula / Extraction': {
+      '<5kg': 2000,
+      '5.1-8.5kg': 2500,
+      '8.6-17kg': 3000,
+      '17.1-35kg': 4000,
+      '35.1+': 6000
+    },
+    'Dental extraction of Deciduous + Local': {
+      '<5kg': 1000,
+      '5.1-8.5kg': 1500,
+      '8.6-17kg': 2500,
+      '17.1-35kg': 3000,
+      '35.1+': 4000
+    },
+    'Dental Extraction of loosened tooth': {
+      '<5kg': 0,
+      '5.1-8.5kg': 0,
+      '8.6-17kg': 0,
+      '17.1-35kg': 0,
+      '35.1+': 500
+    }
+  };
+
+  const dentalCareAnesthetics = {
+    'Local': {
+      '<5kg': 500,
+      '5.1-8.5kg': 600,
+      '8.6-17kg': 700,
+      '17.1-35kg': 800,
+      '35.1+': 1000
+    },
+    'Sedative': {
+      '<5kg': 700,
+      '5.1-8.5kg': 850,
+      '8.6-17kg': 1000,
+      '17.1-35kg': 1200,
+      '35.1+': 1500
+    },
+    'General': {
+      '<5kg': 1800,
+      '5.1-8.5kg': 2200,
+      '8.6-17kg': 2600,
+      '17.1-35kg': 2800,
+      '35.1+': 3000
+    }
+  };
+
   useEffect(() => {
     const userData = localStorage.getItem('user');
     const token = localStorage.getItem('token');
@@ -337,9 +458,18 @@ const AdminDashboard: React.FC = () => {
     fetchAnalyticsData();
     fetchRecentRecords();
 
-    // Initialize walk-in pets array
+    // Initialize walk-in pets array with today's date and current time
+    const now = new Date();
+    const currentTime = now.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
+    
     setWalkInData(prev => ({
       ...prev,
+      selectedDate: now,
+      selectedTime: currentTime,
       pets: [{ id: 1, type: 'dog', breed: '', name: '' }]
     }));
   }, []);
@@ -350,6 +480,14 @@ const AdminDashboard: React.FC = () => {
       fetchCustomers();
     }
   }, [activeTab]);
+
+  // Fetch inventory data when inventory tab is accessed
+  useEffect(() => {
+    if (activeTab === 'inventory') {
+      fetchCategories();
+      fetchProducts();
+    }
+  }, [activeTab, productSearchTerm, selectedCategory]);
 
   const fetchDashboardData = async () => {
     try {
@@ -491,6 +629,8 @@ const AdminDashboard: React.FC = () => {
       if (appointment) {
         setAppointmentToComplete(appointment);
         initializeMedicalExam(appointment);
+        // Fetch products and categories for inventory selection
+        await Promise.all([fetchProducts(), fetchCategories()]);
         setShowMedicalModal(true);
       }
       return;
@@ -780,6 +920,24 @@ const AdminDashboard: React.FC = () => {
         const updatedServices = [...currentServices, service];
         setWalkInData(prev => ({ ...prev, services: updatedServices }));
       }
+    } else if (service === 'Dental Care') {
+      if (currentServices.includes(service)) {
+        // Remove dental care service and clear all pet dental care details
+        const updatedServices = currentServices.filter(s => s !== service);
+        const updatedPets = walkInData.pets.map(pet => ({
+          ...pet,
+          dentalCareDetails: undefined
+        }));
+        setWalkInData(prev => ({ 
+          ...prev, 
+          services: updatedServices,
+          pets: updatedPets
+        }));
+      } else {
+        // Add dental care service
+        const updatedServices = [...currentServices, service];
+        setWalkInData(prev => ({ ...prev, services: updatedServices }));
+      }
     } else {
       const updatedServices = currentServices.includes(service)
         ? currentServices.filter(s => s !== service)
@@ -787,6 +945,28 @@ const AdminDashboard: React.FC = () => {
       
       setWalkInData(prev => ({ ...prev, services: updatedServices }));
     }
+  };
+
+  // Walk-in dental care functions
+  const handleWalkInDentalCareModalOpen = (petIndex: number) => {
+    setCurrentWalkInPetForDentalCare(petIndex);
+    setShowWalkInDentalCareModal(true);
+    setSelectedWalkInDentalProcedure(null);
+  };
+
+  const handleWalkInDentalCareModalClose = () => {
+    setShowWalkInDentalCareModal(false);
+    setCurrentWalkInPetForDentalCare(null);
+    setSelectedWalkInDentalProcedure(null);
+  };
+
+  const updateWalkInPetDentalCare = (petIndex: number, procedure: string, size: string, procedurePrice: number, anesthetic: string, anestheticPrice: number) => {
+    const updatedPets = [...walkInData.pets];
+    updatedPets[petIndex] = {
+      ...updatedPets[petIndex],
+      dentalCareDetails: { procedure, size, procedurePrice, anesthetic, anestheticPrice, totalPrice: procedurePrice + anestheticPrice }
+    };
+    setWalkInData(prev => ({ ...prev, pets: updatedPets }));
   };
 
   const handleViewDetails = async (appointment: Appointment) => {
@@ -821,6 +1001,30 @@ const AdminDashboard: React.FC = () => {
     
     setSelectedAppointment(appointmentWithMedical);
     setShowDetailsModal(true);
+  };
+
+  // Handle customer appointment details (from customer tab)
+  const handleCustomerAppointmentDetails = async (appointmentId: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      // Fetch full appointment details by ID
+      const response = await fetch(`${apiUrl.adminAppointments()}/${appointmentId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      if (data.status && data.appointment) {
+        // Use the full appointment data with the regular handleViewDetails function
+        handleViewDetails(data.appointment);
+      } else {
+        console.error('Failed to fetch appointment details:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching appointment details:', error);
+    }
   };
 
   const handleCloseDetails = () => {
@@ -954,6 +1158,57 @@ const AdminDashboard: React.FC = () => {
     });
   };
 
+  // Inventory item handling functions
+  const addInventoryItem = (product: Product) => {
+    const existingItem = selectedInventoryItems.find(item => item.product.id === product.id);
+    if (existingItem) {
+      // Increase quantity if already exists
+      setSelectedInventoryItems(prev => 
+        prev.map(item => 
+          item.product.id === product.id 
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        )
+      );
+    } else {
+      // Add new item
+      setSelectedInventoryItems(prev => [...prev, { product, quantity: 1 }]);
+    }
+  };
+
+  const updateInventoryItemQuantity = (productId: number, quantity: number) => {
+    if (quantity <= 0) {
+      setSelectedInventoryItems(prev => prev.filter(item => item.product.id !== productId));
+    } else {
+      setSelectedInventoryItems(prev => 
+        prev.map(item => 
+          item.product.id === productId 
+            ? { ...item, quantity }
+            : item
+        )
+      );
+    }
+  };
+
+  const removeInventoryItem = (productId: number) => {
+    setSelectedInventoryItems(prev => prev.filter(item => item.product.id !== productId));
+  };
+
+  const getFilteredInventoryProducts = () => {
+    return products.filter(product => {
+      const matchesSearch = product.name.toLowerCase().includes(inventorySearchTerm.toLowerCase()) ||
+                           product.id.toString().includes(inventorySearchTerm);
+      const matchesCategory = !inventoryFilterCategory || 
+                             (product.category_id ? product.category_id.toString() === inventoryFilterCategory : false);
+      const hasStock = product.quantity > 0;
+      return matchesSearch && matchesCategory && hasStock;
+    });
+  };
+
+  const calculateInventoryItemsTotal = () => {
+    return selectedInventoryItems.reduce((total, item) => total + (item.product.price * item.quantity), 0);
+  };
+
   const completeMedicalExamination = async () => {
     if (!medicalExam || !appointmentToComplete) return;
 
@@ -991,95 +1246,78 @@ const AdminDashboard: React.FC = () => {
       }
     }
 
+    // Validate inventory items quantities don't exceed stock
+    for (const item of selectedInventoryItems) {
+      if (item.quantity > item.product.quantity) {
+        alert(`Quantity for ${item.product.name} (${item.quantity}) exceeds available stock (${item.product.quantity})`);
+        return;
+      }
+    }
+
     try {
       setUpdatingStatus(appointmentToComplete.id);
 
-      // If there's no medical data, skip saving medical records and just mark completed
       const token = localStorage.getItem('token');
-      if (!hasMedicalData) {
-        const statusResponse = await fetch(apiUrl.appointmentStatus(appointmentToComplete.id), {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify({ status: 'completed' })
+      
+      // Prepare completion data
+      const completionData = {
+        appointment_id: appointmentToComplete.id,
+        inventory_items: selectedInventoryItems.map(item => ({
+          product_id: item.product.id,
+          quantity: item.quantity,
+          price: item.product.price
+        }))
+      };
+
+      // Add medical data if it exists
+      if (hasMedicalData) {
+        Object.assign(completionData, {
+          doctor_name: medicalExam.doctorName,
+          pet_records: medicalExam.petRecords,
+          total_cost: medicalExam.totalCost,
         });
+      }
 
-        if (statusResponse.ok) {
-          // Update local state
-          setAppointments(prev => 
-            prev.map(apt => 
-              apt.id === appointmentToComplete.id 
-                ? { ...apt, status: 'completed' as any }
-                : apt
-            )
-          );
+      // Call the backend to complete appointment (will save medical records and update inventory)
+      const response = await fetch(apiUrl.completeAppointment(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(completionData)
+      });
 
-          // Close modal and refresh data
-          setShowMedicalModal(false);
-          setMedicalExam(null);
-          setAppointmentToComplete(null);
-          fetchDashboardData();
-        } else {
-          alert('Failed to update appointment status');
+      if (response.ok) {
+        // Update local state
+        setAppointments(prev => 
+          prev.map(apt => 
+            apt.id === appointmentToComplete.id 
+              ? { ...apt, status: 'completed' as any }
+              : apt
+          )
+        );
+        
+        // Close modal and refresh data
+        setShowMedicalModal(false);
+        setMedicalExam(null);
+        setAppointmentToComplete(null);
+        setSelectedInventoryItems([]);
+        setInventorySearchTerm('');
+        setInventoryFilterCategory('');
+        fetchDashboardData();
+        fetchPetRecords();
+        if (activeTab === 'inventory') {
+          fetchProducts(); // Refresh inventory to show updated quantities
         }
       } else {
-        // Save medical records when medical data exists
-        const response = await fetch(apiUrl.medicalRecords(), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify({
-            appointment_id: appointmentToComplete.id,
-            doctor_name: medicalExam.doctorName,
-            pet_records: medicalExam.petRecords,
-            total_cost: medicalExam.totalCost,
-          })
-        });
-
-        if (response.ok) {
-          // Update appointment status to completed
-          const statusResponse = await fetch(apiUrl.appointmentStatus(appointmentToComplete.id), {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify({ status: 'completed' })
-          });
-
-          if (statusResponse.ok) {
-            // Update local state
-            setAppointments(prev => 
-              prev.map(apt => 
-                apt.id === appointmentToComplete.id 
-                  ? { ...apt, status: 'completed' as any }
-                  : apt
-              )
-            );
-            
-            // Close modal and refresh data
-            setShowMedicalModal(false);
-            setMedicalExam(null);
-            setAppointmentToComplete(null);
-            fetchDashboardData();
-            fetchPetRecords();
-          } else {
-            alert('Failed to update appointment status');
-          }
-        } else {
-          alert('Failed to save medical records');
-        }
+        const errorData = await response.json();
+        alert(errorData.message || 'Failed to complete appointment');
       }
     } catch (error) {
-      console.error('Error completing medical examination:', error);
-      alert('An error occurred while saving medical records');
+      console.error('Error completing appointment:', error);
+      alert('An error occurred while completing the appointment');
     } finally {
       setUpdatingStatus(null);
     }
@@ -1089,6 +1327,9 @@ const AdminDashboard: React.FC = () => {
     setShowMedicalModal(false);
     setMedicalExam(null);
     setAppointmentToComplete(null);
+    setSelectedInventoryItems([]);
+    setInventorySearchTerm('');
+    setInventoryFilterCategory('');
   };
 
   const fetchPetRecords = async () => {
@@ -1137,6 +1378,7 @@ const AdminDashboard: React.FC = () => {
         // Set empty analytics data to stop loading state
         setAnalyticsData({
           monthlyAppointments: {},
+          monthlyIncome: {},
           todayEarnings: 0,
           monthlyEarnings: 0,
           avgMonthlyAppointments: 0
@@ -1147,6 +1389,7 @@ const AdminDashboard: React.FC = () => {
       // Set empty analytics data to stop loading state
       setAnalyticsData({
         monthlyAppointments: {},
+        monthlyIncome: {},
         todayEarnings: 0,
         monthlyEarnings: 0,
         avgMonthlyAppointments: 0
@@ -1183,6 +1426,234 @@ const AdminDashboard: React.FC = () => {
     } catch (error) {
       console.error('Error fetching recent records:', error);
       setRecentRecords([]);
+    }
+  };
+
+  // Inventory Management Functions
+  const fetchProducts = async () => {
+    setInventoryLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const queryParams = new URLSearchParams();
+      
+      if (productSearchTerm) {
+        queryParams.append('search', productSearchTerm);
+      }
+      if (selectedCategory) {
+        queryParams.append('category_id', selectedCategory);
+      }
+      
+      const url = `${apiUrl.products()}?${queryParams.toString()}`;
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (data.status) {
+        setProducts(data.products);
+      } else {
+        console.error('Failed to fetch products:', data.message);
+        showNotification('Failed to fetch products', 'error');
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      showNotification('Error fetching products', 'error');
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(apiUrl.categories(), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (data.status) {
+        setCategories(data.categories);
+      } else {
+        console.error('Failed to fetch categories:', data.message);
+        showNotification('Failed to fetch categories', 'error');
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      showNotification('Error fetching categories', 'error');
+    }
+  };
+
+  const handleProductSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInventoryLoading(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const url = editingProduct ? apiUrl.product(editingProduct.id) : apiUrl.products();
+      const method = editingProduct ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          ...productFormData,
+          price: parseFloat(productFormData.price),
+          quantity: parseInt(productFormData.quantity),
+          category_id: productFormData.category_id || null
+        }),
+      });
+
+      const data = await response.json();
+      if (data.status) {
+        showNotification(
+          editingProduct ? 'Product updated successfully' : 'Product created successfully',
+          'success'
+        );
+        setShowProductModal(false);
+        setEditingProduct(null);
+        setProductFormData({ name: '', description: '', price: '', quantity: '', category_id: '' });
+        fetchProducts();
+      } else {
+        showNotification(data.message || 'Failed to save product', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving product:', error);
+      showNotification('Error saving product', 'error');
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
+
+  const handleCategorySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInventoryLoading(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const url = editingCategory ? apiUrl.category(editingCategory.id) : apiUrl.categories();
+      const method = editingCategory ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(categoryFormData),
+      });
+
+      const data = await response.json();
+      if (data.status) {
+        showNotification(
+          editingCategory ? 'Category updated successfully' : 'Category created successfully',
+          'success'
+        );
+        setShowCategoryModal(false);
+        setEditingCategory(null);
+        setCategoryFormData({ name: '', description: '' });
+        fetchCategories();
+        fetchProducts(); // Refresh products to update category relationships
+      } else {
+        showNotification(data.message || 'Failed to save category', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving category:', error);
+      showNotification('Error saving category', 'error');
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
+
+  const handleUpdateQuantity = async (productId: number, action: 'increment' | 'decrement') => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(apiUrl.productQuantity(productId), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ action, amount: 1 }),
+      });
+
+      const data = await response.json();
+      if (data.status) {
+        fetchProducts(); // Refresh products list
+      } else {
+        showNotification(data.message || 'Failed to update quantity', 'error');
+      }
+    } catch (error) {
+      console.error('Error updating quantity:', error);
+      showNotification('Error updating quantity', 'error');
+    }
+  };
+
+  const handleDeleteProduct = async (productId: number) => {
+    if (!window.confirm('Are you sure you want to delete this product?')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(apiUrl.product(productId), {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (data.status) {
+        showNotification('Product deleted successfully', 'success');
+        fetchProducts();
+      } else {
+        showNotification(data.message || 'Failed to delete product', 'error');
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      showNotification('Error deleting product', 'error');
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId: number) => {
+    if (!window.confirm('Are you sure you want to delete this category?')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(apiUrl.category(categoryId), {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (data.status) {
+        showNotification('Category deleted successfully', 'success');
+        fetchCategories();
+        fetchProducts(); // Refresh products to update category relationships
+      } else {
+        showNotification(data.message || 'Failed to delete category', 'error');
+      }
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      showNotification('Error deleting category', 'error');
     }
   };
 
@@ -1279,6 +1750,33 @@ const AdminDashboard: React.FC = () => {
   return (
     <>
       <Header />
+      
+      {/* Success/Error Notification */}
+      {notification && (
+        <div className={`fixed top-20 right-4 z-50 max-w-sm w-full p-4 rounded-lg shadow-lg ${
+          notification.type === 'success' 
+            ? 'bg-green-100 border border-green-400 text-green-700' 
+            : 'bg-red-100 border border-red-400 text-red-700'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              {notification.type === 'success' ? (
+                <FaCheckCircle className="w-5 h-5 mr-2" />
+              ) : (
+                <FaExclamationTriangle className="w-5 h-5 mr-2" />
+              )}
+              <span className="text-sm font-medium">{notification.message}</span>
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              className="ml-3 text-gray-400 hover:text-gray-600"
+            >
+              <FaTimes className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="min-h-screen bg-gray-50 py-8 mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
@@ -1353,6 +1851,16 @@ const AdminDashboard: React.FC = () => {
                   }`}
                 >
                   Analytics
+                </button>
+                <button
+                  onClick={() => setActiveTab('inventory')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'inventory'
+                      ? 'border-teal-500 text-teal-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Inventory
                 </button>
               </nav>
             </div>
@@ -1673,19 +2181,29 @@ const AdminDashboard: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Appointment Time *
                         </label>
-                        <select
+                        <input
+                          type="time"
                           value={walkInData.selectedTime}
-                          onChange={(e) => setWalkInData(prev => ({...prev, selectedTime: e.target.value}))}
+                          onChange={(e) => {
+                            // Convert 24-hour format to 12-hour format for display
+                            const time24 = e.target.value;
+                            if (time24) {
+                              const [hours, minutes] = time24.split(':');
+                              const hour = parseInt(hours);
+                              const ampm = hour >= 12 ? 'PM' : 'AM';
+                              const hour12 = hour % 12 || 12;
+                              const time12 = `${hour12}:${minutes} ${ampm}`;
+                              setWalkInData(prev => ({...prev, selectedTime: time12}));
+                            } else {
+                              setWalkInData(prev => ({...prev, selectedTime: ''}));
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                           required
-                        >
-                          <option value="">Select time</option>
-                          {['8:00 AM', '8:30 AM', '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM',
-                            '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM',
-                            '2:00 PM', '2:30 PM', '3:00 PM'].map(time => (
-                            <option key={time} value={time}>{time}</option>
-                          ))}
-                        </select>
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Enter the exact time when the walk-in appointment occurred
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -1854,6 +2372,53 @@ const AdminDashboard: React.FC = () => {
                               )}
                             </div>
                           )}
+
+                          {/* Dental Care Details - Show when Dental Care is selected */}
+                          {walkInData.services.includes('Dental Care') && (
+                            <div className="mt-4 pt-4 border-t border-gray-200">
+                              <div className="flex items-center justify-between mb-3">
+                                <h5 className="text-sm font-semibold text-gray-700">
+                                  Dental Care Details for {pet.name || `Pet #${index + 1}`}
+                                </h5>
+                                <button
+                                  type="button"
+                                  onClick={() => handleWalkInDentalCareModalOpen(index)}
+                                  className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded-full hover:bg-blue-200 transition-colors"
+                                >
+                                  {pet.dentalCareDetails ? 'Edit Procedure' : 'Select Procedure'}
+                                </button>
+                              </div>
+                              
+                              {pet.dentalCareDetails && (
+                                <div className="bg-blue-50 p-3 rounded-lg">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mb-3">
+                                    <div>
+                                      <span className="font-medium text-blue-600">Procedure:</span>
+                                      <p className="text-gray-800">{pet.dentalCareDetails.procedure}</p>
+                                    </div>
+                                    <div>
+                                      <span className="font-medium text-blue-600">Pet Size:</span>
+                                      <p className="text-gray-800">{pet.dentalCareDetails.size}</p>
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                                    <div>
+                                      <span className="font-medium text-blue-600">Anesthetic:</span>
+                                      <p className="text-gray-800">{pet.dentalCareDetails.anesthetic}</p>
+                                    </div>
+                                    <div>
+                                      <span className="font-medium text-blue-600">Total Price:</span>
+                                      <p className="text-gray-800 font-semibold">₱{pet.dentalCareDetails.totalPrice}</p>
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      <p>Procedure: ₱{pet.dentalCareDetails.procedurePrice}</p>
+                                      <p>Anesthetic: ₱{pet.dentalCareDetails.anestheticPrice}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1892,6 +2457,47 @@ const AdminDashboard: React.FC = () => {
                           <span className="text-teal-600">
                             ₱{walkInData.pets.reduce((total, pet) => {
                               return total + (pet.groomingDetails?.price || 0);
+                            }, 0)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dental Care Cost Summary */}
+                  {walkInData.services.includes('Dental Care') && walkInData.pets.some(pet => pet.dentalCareDetails) && (
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                      <h3 className="font-semibold text-gray-800 mb-3">Dental Care Services Summary</h3>
+                      {walkInData.pets.map((pet, index) => {
+                        if (!pet.dentalCareDetails) return null;
+                        
+                        return (
+                          <div key={index} className="mb-3 last:mb-0">
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="font-medium text-gray-700">
+                                {pet.name || `Pet #${index + 1}`}
+                              </span>
+                              <span className="text-blue-600 font-semibold">₱{pet.dentalCareDetails.totalPrice}</span>
+                            </div>
+                            <div className="text-sm text-gray-600 space-y-1">
+                              <div className="ml-4 flex justify-between">
+                                <span>{pet.dentalCareDetails.procedure} ({pet.dentalCareDetails.size})</span>
+                                <span>₱{pet.dentalCareDetails.procedurePrice}</span>
+                              </div>
+                              <div className="ml-4 flex justify-between">
+                                <span>{pet.dentalCareDetails.anesthetic} Anesthetic</span>
+                                <span>₱{pet.dentalCareDetails.anestheticPrice}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="pt-3 border-t border-blue-300 mt-3">
+                        <div className="flex justify-between items-center font-semibold text-lg">
+                          <span className="text-gray-800">Total Dental Care Cost:</span>
+                          <span className="text-blue-600">
+                            ₱{walkInData.pets.reduce((total, pet) => {
+                              return total + (pet.dentalCareDetails?.totalPrice || 0);
                             }, 0)}
                           </span>
                         </div>
@@ -2048,6 +2654,9 @@ const AdminDashboard: React.FC = () => {
                               <div>
                                 <h3 className="text-lg font-medium text-gray-900">{customer.name}</h3>
                                 <p className="text-sm text-gray-500">{customer.email}</p>
+                                <p className="text-sm text-gray-500">
+                                  📞 {customer.phone_number || 'No phone number set'}
+                                </p>
                                 {customer.email_verified_at && (
                                   <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 mt-1">
                                     Verified
@@ -2141,6 +2750,12 @@ const AdminDashboard: React.FC = () => {
                                                       {new Date(appointment.appointment_date).toLocaleDateString()} at {appointment.appointment_time}
                                                     </span>
                                                   </div>
+                                                  <button
+                                                    onClick={() => handleCustomerAppointmentDetails(appointment.id)}
+                                                    className="px-3 py-1 bg-teal-100 text-teal-700 rounded hover:bg-teal-200 transition-colors text-xs font-medium"
+                                                  >
+                                                    Details
+                                                  </button>
                                                 </div>
                                                 <div className="text-gray-600">
                                                   <p><strong>Services:</strong> {appointment.services.join(', ')}</p>
@@ -2200,7 +2815,7 @@ const AdminDashboard: React.FC = () => {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Pet Information
+                        Pet & Owner
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Date & Doctor
@@ -2228,6 +2843,7 @@ const AdminDashboard: React.FC = () => {
                             <div>
                               <div className="text-sm font-medium text-gray-900">{record.pet_name}</div>
                               <div className="text-sm text-gray-500">Weight: {record.weight} kg</div>
+                              <div className="text-sm text-gray-500">Owner: {record.owner_name || 'Unknown'}</div>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -2297,7 +2913,7 @@ const AdminDashboard: React.FC = () => {
                       </svg>
                     </div>
                     <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-600">Monthly Earnings</p>
+                      <p className="text-sm font-medium text-gray-600">This Month's Earnings</p>
                       <p className="text-2xl font-bold text-gray-900">₱{analyticsData?.monthlyEarnings || 0}</p>
                     </div>
                   </div>
@@ -2316,52 +2932,145 @@ const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Monthly Appointments Chart */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Appointments Report</h3>
-                {analyticsData && analyticsData.monthlyAppointments ? (
-                  <div className="space-y-4">
-                    {Object.entries(analyticsData.monthlyAppointments).map(([month, count]: [string, any]) => {
-                      const countNum = Number(count);
-                      const maxCount = Math.max(1, ...Object.values(analyticsData.monthlyAppointments).map((val: any) => Number(val)));
-                      const percentage = maxCount > 0 ? (countNum / maxCount) * 100 : 0;
-                      
-                      return (
-                        <div key={month} className="flex items-center space-x-4">
-                          <div className="w-24 text-sm font-medium text-gray-700">
-                            {month}
-                          </div>
-                          <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
-                            <div
-                              className="bg-teal-600 h-6 rounded-full flex items-center justify-end pr-3 transition-all duration-500"
-                              style={{ width: `${Math.max(percentage, countNum > 0 ? 10 : 0)}%` }}
-                            >
-                              {countNum > 0 && (
-                                <span className="text-white text-sm font-medium">
-                                  {countNum}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="w-16 text-sm text-gray-600">
-                            {countNum} apt{countNum !== 1 ? 's' : ''}
-                          </div>
-                        </div>
-                      );
-                    })}
+              {/* Analytics Reports */}
+              <div className="bg-white rounded-lg shadow">
+                <div className="p-6 border-b border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Analytics Reports</h3>
+                      <p className="text-sm text-gray-600 mt-1">Detailed monthly reports and trends</p>
+                    </div>
+                    
+                    {/* Sub-tab Navigation */}
+                    <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+                      <button
+                        onClick={() => setAnalyticsSubTab('appointments')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                          analyticsSubTab === 'appointments'
+                            ? 'bg-white text-teal-700 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        Monthly Appointments
+                      </button>
+                      <button
+                        onClick={() => setAnalyticsSubTab('income')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                          analyticsSubTab === 'income'
+                            ? 'bg-white text-teal-700 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        Monthly Income
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <div className="text-center py-8">
-                    {analyticsData === null ? (
-                      <>
-                        <FaSpinner className="animate-spin text-4xl text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500">Loading chart data...</p>
-                      </>
+                </div>
+                
+                {/* Monthly Appointments Report */}
+                {analyticsSubTab === 'appointments' && (
+                  <div className="p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Monthly Appointments Report</h4>
+                    {analyticsData && analyticsData.monthlyAppointments ? (
+                      <div className="space-y-4">
+                        {Object.entries(analyticsData.monthlyAppointments).map(([month, count]: [string, any]) => {
+                          const countNum = Number(count);
+                          const maxCount = Math.max(1, ...Object.values(analyticsData.monthlyAppointments).map((val: any) => Number(val)));
+                          const percentage = maxCount > 0 ? (countNum / maxCount) * 100 : 0;
+                          
+                          return (
+                            <div key={month} className="flex items-center space-x-4">
+                              <div className="w-24 text-sm font-medium text-gray-700">
+                                {month}
+                              </div>
+                              <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
+                                <div
+                                  className="bg-teal-600 h-6 rounded-full flex items-center justify-end pr-3 transition-all duration-500"
+                                  style={{ width: `${Math.max(percentage, countNum > 0 ? 10 : 0)}%` }}
+                                >
+                                  {countNum > 0 && (
+                                    <span className="text-white text-sm font-medium">
+                                      {countNum}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="w-16 text-sm text-gray-600">
+                                {countNum} apt{countNum !== 1 ? 's' : ''}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     ) : (
-                      <>
-                        <FaClipboardList className="mx-auto text-4xl text-gray-400 mb-4" />
-                        <p className="text-gray-500">No appointment data available.</p>
-                      </>
+                      <div className="text-center py-8">
+                        {analyticsData === null ? (
+                          <>
+                            <FaSpinner className="animate-spin text-4xl text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-500">Loading chart data...</p>
+                          </>
+                        ) : (
+                          <>
+                            <FaClipboardList className="mx-auto text-4xl text-gray-400 mb-4" />
+                            <p className="text-gray-500">No appointment data available.</p>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Monthly Income Report */}
+                {analyticsSubTab === 'income' && (
+                  <div className="p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Monthly Income Report</h4>
+                    {analyticsData && analyticsData.monthlyIncome ? (
+                      <div className="space-y-4">
+                        {Object.entries(analyticsData.monthlyIncome).map(([month, income]: [string, any]) => {
+                          const incomeNum = Number(income);
+                          const maxIncome = Math.max(1, ...Object.values(analyticsData.monthlyIncome).map((val: any) => Number(val)));
+                          const percentage = maxIncome > 0 ? (incomeNum / maxIncome) * 100 : 0;
+                          
+                          return (
+                            <div key={month} className="flex items-center space-x-4">
+                              <div className="w-24 text-sm font-medium text-gray-700">
+                                {month}
+                              </div>
+                              <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
+                                <div
+                                  className="bg-blue-600 h-6 rounded-full flex items-center justify-end pr-3 transition-all duration-500"
+                                  style={{ width: `${Math.max(percentage, incomeNum > 0 ? 10 : 0)}%` }}
+                                >
+                                  {incomeNum > 0 && (
+                                    <span className="text-white text-sm font-medium">
+                                      ₱{incomeNum.toLocaleString()}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="w-20 text-sm text-gray-600">
+                                ₱{incomeNum.toLocaleString()}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        {analyticsData === null ? (
+                          <>
+                            <FaSpinner className="animate-spin text-4xl text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-500">Loading income data...</p>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                            </svg>
+                            <p className="text-gray-500">No income data available.</p>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
@@ -2391,6 +3100,7 @@ const AdminDashboard: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
                               <div>
                                 <p><span className="font-medium">Email:</span> {appointment.user.email}</p>
+                                <p><span className="font-medium">Phone:</span> {appointment.user.phone_number || 'No phone number set'}</p>
                                 <p><span className="font-medium">Date:</span> {new Date(appointment.appointment_date).toLocaleDateString()}</p>
                                 <p><span className="font-medium">Time:</span> {appointment.appointment_time}</p>
                               </div>
@@ -2432,8 +3142,471 @@ const AdminDashboard: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Inventory Tab */}
+          {activeTab === 'inventory' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg shadow">
+                <div className="p-6 border-b border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Inventory Management</h3>
+                      <p className="text-sm text-gray-600 mt-1">Manage products and categories for your veterinary clinic</p>
+                    </div>
+                    
+                    {/* Sub-tab Navigation */}
+                    <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+                      <button
+                        onClick={() => setInventorySubTab('products')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                          inventorySubTab === 'products'
+                            ? 'bg-white text-teal-700 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        Products
+                      </button>
+                      <button
+                        onClick={() => setInventorySubTab('categories')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                          inventorySubTab === 'categories'
+                            ? 'bg-white text-teal-700 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        Categories
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Products Management */}
+                {inventorySubTab === 'products' && (
+                  <div className="p-6">
+                    {/* Search and Filter Controls */}
+                    <div className="flex flex-col md:flex-row gap-4 mb-6">
+                      <div className="flex-1">
+                        <input
+                          type="text"
+                          placeholder="Search by name, description, or ID..."
+                          value={productSearchTerm}
+                          onChange={(e) => setProductSearchTerm(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div className="w-full md:w-48">
+                        <select
+                          value={selectedCategory}
+                          onChange={(e) => setSelectedCategory(e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                        >
+                          <option value="">All Categories</option>
+                          {categories.map(category => (
+                            <option key={category.id} value={category.id.toString()}>
+                              {category.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setEditingProduct(null);
+                          setProductFormData({ name: '', description: '', price: '', quantity: '', category_id: '' });
+                          setShowProductModal(true);
+                        }}
+                        className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors whitespace-nowrap"
+                      >
+                        Add Product
+                      </button>
+                    </div>
+
+                    {/* Products Table */}
+                    {inventoryLoading ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto"></div>
+                        <p className="mt-2 text-gray-500">Loading products...</p>
+                      </div>
+                    ) : products.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full table-auto">
+                          <thead>
+                            <tr className="bg-gray-50">
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {products.map((product) => (
+                              <tr key={product.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">#{product.id}</td>
+                                <td className="px-4 py-4">
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                                    {product.description && (
+                                      <div className="text-sm text-gray-500 truncate max-w-xs">{product.description}</div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap">
+                                  {product.category ? (
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                      {product.category.name}
+                                    </span>
+                                  ) : (
+                                    <span className="text-sm text-gray-400">No category</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">₱{product.price}</td>
+                                <td className="px-4 py-4 whitespace-nowrap">
+                                  <div className="flex items-center space-x-2">
+                                    <button
+                                      onClick={() => handleUpdateQuantity(product.id, 'decrement')}
+                                      className="w-8 h-8 flex items-center justify-center bg-red-100 text-red-600 rounded-full hover:bg-red-200 transition-colors"
+                                      disabled={product.quantity === 0}
+                                    >
+                                      -
+                                    </button>
+                                    <span className="min-w-[3rem] text-center text-sm font-medium">{product.quantity}</span>
+                                    <button
+                                      onClick={() => handleUpdateQuantity(product.id, 'increment')}
+                                      className="w-8 h-8 flex items-center justify-center bg-green-100 text-green-600 rounded-full hover:bg-green-200 transition-colors"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                                  <div className="flex space-x-2">
+                                    <button
+                                      onClick={() => {
+                                        setEditingProduct(product);
+                                        setProductFormData({
+                                          name: product.name,
+                                          description: product.description || '',
+                                          price: product.price.toString(),
+                                          quantity: product.quantity.toString(),
+                                          category_id: product.category_id?.toString() || ''
+                                        });
+                                        setShowProductModal(true);
+                                      }}
+                                      className="text-blue-600 hover:text-blue-900"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteProduct(product.id)}
+                                      className="text-red-600 hover:text-red-900"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="text-gray-400 mb-4">
+                          <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M9 5l7 3" />
+                          </svg>
+                        </div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
+                        <p className="text-gray-500 mb-4">
+                          {productSearchTerm || selectedCategory ? 'No products match your current filters.' : 'Get started by adding your first product.'}
+                        </p>
+                        <button
+                          onClick={() => {
+                            setEditingProduct(null);
+                            setProductFormData({ name: '', description: '', price: '', quantity: '', category_id: '' });
+                            setShowProductModal(true);
+                          }}
+                          className="inline-flex items-center px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                        >
+                          Add Product
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Categories Management */}
+                {inventorySubTab === 'categories' && (
+                  <div className="p-6">
+                    <div className="flex justify-between items-center mb-6">
+                      <h4 className="text-lg font-medium text-gray-900">Product Categories</h4>
+                      <button
+                        onClick={() => {
+                          setEditingCategory(null);
+                          setCategoryFormData({ name: '', description: '' });
+                          setShowCategoryModal(true);
+                        }}
+                        className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                      >
+                        Add Category
+                      </button>
+                    </div>
+
+                    {categories.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {categories.map((category) => (
+                          <div key={category.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex-1">
+                                <h5 className="text-lg font-medium text-gray-900">{category.name}</h5>
+                                {category.description && (
+                                  <p className="text-sm text-gray-600 mt-1">{category.description}</p>
+                                )}
+                              </div>
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                {category.products_count || 0} products
+                              </span>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => {
+                                  setEditingCategory(category);
+                                  setCategoryFormData({
+                                    name: category.name,
+                                    description: category.description || ''
+                                  });
+                                  setShowCategoryModal(true);
+                                }}
+                                className="flex-1 px-3 py-2 text-sm bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCategory(category.id)}
+                                className="flex-1 px-3 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="text-gray-400 mb-4">
+                          <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.99 1.99 0 013 12V7a4 4 0 014-4z" />
+                          </svg>
+                        </div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No categories found</h3>
+                        <p className="text-gray-500 mb-4">Create categories to organize your products.</p>
+                        <button
+                          onClick={() => {
+                            setEditingCategory(null);
+                            setCategoryFormData({ name: '', description: '' });
+                            setShowCategoryModal(true);
+                          }}
+                          className="inline-flex items-center px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                        >
+                          Add Category
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Product Modal */}
+      {showProductModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {editingProduct ? 'Edit Product' : 'Add New Product'}
+                </h3>
+                <button
+                  onClick={() => setShowProductModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <form onSubmit={handleProductSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Product Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={productFormData.name}
+                    onChange={(e) => setProductFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    placeholder="Enter product name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={productFormData.description}
+                    onChange={(e) => setProductFormData(prev => ({ ...prev, description: e.target.value }))}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    placeholder="Enter product description"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Price (₱) *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="0.01"
+                      value={productFormData.price}
+                      onChange={(e) => setProductFormData(prev => ({ ...prev, price: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Quantity *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      value={productFormData.quantity}
+                      onChange={(e) => setProductFormData(prev => ({ ...prev, quantity: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={productFormData.category_id}
+                    onChange={(e) => setProductFormData(prev => ({ ...prev, category_id: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  >
+                    <option value="">Select a category</option>
+                    {categories.map(category => (
+                      <option key={category.id} value={category.id.toString()}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowProductModal(false)}
+                    className="flex-1 px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition-colors"
+                  >
+                    {editingProduct ? 'Update Product' : 'Add Product'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Category Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {editingCategory ? 'Edit Category' : 'Add New Category'}
+                </h3>
+                <button
+                  onClick={() => setShowCategoryModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <form onSubmit={handleCategorySubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Category Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={categoryFormData.name}
+                    onChange={(e) => setCategoryFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    placeholder="Enter category name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={categoryFormData.description}
+                    onChange={(e) => setCategoryFormData(prev => ({ ...prev, description: e.target.value }))}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    placeholder="Enter category description"
+                  />
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowCategoryModal(false)}
+                    className="flex-1 px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition-colors"
+                  >
+                    {editingCategory ? 'Update Category' : 'Add Category'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Appointment Details Modal */}
       {showDetailsModal && selectedAppointment && (
@@ -2742,6 +3915,25 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
               )}
+              {/* Inventory Products Used */}
+              {selectedAppointment.status === 'completed' && (selectedAppointment as any).inventory_usage && (selectedAppointment as any).inventory_usage.length > 0 && (
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Products Used</h4>
+                  <div className="space-y-2">
+                    {(selectedAppointment as any).inventory_usage.map((usage: any, index: number) => (
+                      <div key={index} className="flex justify-between items-center bg-white rounded p-3">
+                        <div>
+                          <p className="font-medium text-gray-900">{usage.product_name}</p>
+                          <p className="text-sm text-gray-600">
+                            Quantity: {usage.quantity_used} × ₱{parseFloat(usage.unit_price).toFixed(2)}
+                          </p>
+                        </div>
+                        <span className="text-purple-600 font-semibold">₱{parseFloat(usage.total_price).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Total Summary */}
               <div className="bg-teal-50 rounded-lg p-4">
@@ -2783,6 +3975,16 @@ const AdminDashboard: React.FC = () => {
                       </span>
                     </div>
                   )}
+                  {selectedAppointment.status === 'completed' && (selectedAppointment as any).inventory_usage && (selectedAppointment as any).inventory_usage.length > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Products Used Total:</span>
+                      <span className="font-medium">
+                        ₱{(selectedAppointment as any).inventory_usage.reduce((total: number, usage: any) => {
+                          return total + (parseFloat(usage.total_price) || 0);
+                        }, 0)}
+                      </span>
+                    </div>
+                  )}
                   <div className="pt-2 border-t border-gray-300">
                     <div className="flex justify-between text-lg font-bold">
                       <span className="text-gray-900">Grand Total:</span>
@@ -2799,6 +4001,10 @@ const AdminDashboard: React.FC = () => {
                           (selectedAppointment.status === 'completed' && (selectedAppointment as any).medicalRecords ? 
                             (selectedAppointment as any).medicalRecords.reduce((total: number, record: any) => {
                               return total + (parseFloat(record.test_cost) || 0);
+                            }, 0) : 0) +
+                          (selectedAppointment.status === 'completed' && (selectedAppointment as any).inventory_usage ? 
+                            (selectedAppointment as any).inventory_usage.reduce((total: number, usage: any) => {
+                              return total + (parseFloat(usage.total_price) || 0);
                             }, 0) : 0)}
                       </span>
                     </div>
@@ -3105,6 +4311,126 @@ const AdminDashboard: React.FC = () => {
                 </div>
               ))}
 
+              {/* Inventory Products Section */}
+              <div className="bg-purple-50 rounded-lg p-4">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Inventory Products (Optional)</h4>
+                <p className="text-sm text-gray-600 mb-4">Add products used/dispensed during this appointment</p>
+                
+                {/* Search and Filter */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Search Products (by name or ID)
+                    </label>
+                    <input
+                      type="text"
+                      value={inventorySearchTerm}
+                      onChange={(e) => setInventorySearchTerm(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      placeholder="Search products..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Filter by Category
+                    </label>
+                    <select
+                      value={inventoryFilterCategory}
+                      onChange={(e) => setInventoryFilterCategory(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="">All Categories</option>
+                      {categories.map(category => (
+                        <option key={category.id} value={category.id.toString()}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Available Products */}
+                {getFilteredInventoryProducts().length > 0 ? (
+                  <div className="mb-4">
+                    <h5 className="font-medium text-gray-700 mb-2">Available Products</h5>
+                    <div className="max-h-48 overflow-y-auto border border-gray-200 rounded p-3">
+                      <div className="space-y-2">
+                        {getFilteredInventoryProducts().map(product => (
+                          <div key={product.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded border">
+                            <div className="flex-1">
+                              <div className="font-medium text-sm">{product.name}</div>
+                              <div className="text-xs text-gray-500">
+                                ID: {product.id} | Stock: {product.quantity} | ₱{product.price}
+                              </div>
+                              <div className="text-xs text-gray-400">
+                                {product.category_id ? 
+                                  categories.find(cat => cat.id === product.category_id)?.name || 'Unknown Category'
+                                  : 'No Category'
+                                }
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => addInventoryItem(product)}
+                              className="px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors text-sm font-medium"
+                            >
+                              Add
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-4 text-center py-4 text-gray-500 text-sm">
+                    {inventorySearchTerm || inventoryFilterCategory ? 'No products found matching your criteria' : 'Search for products to add'}
+                  </div>
+                )}
+
+                {/* Selected Products */}
+                {selectedInventoryItems.length > 0 && (
+                  <div className="mb-4">
+                    <h5 className="font-medium text-gray-700 mb-2">Selected Products</h5>
+                    <div className="space-y-2 border border-gray-200 rounded p-3">
+                      {selectedInventoryItems.map(item => (
+                        <div key={item.product.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{item.product.name}</div>
+                            <div className="text-xs text-gray-500">
+                              ₱{item.product.price} each
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="number"
+                              min="1"
+                              max={item.product.quantity}
+                              value={item.quantity}
+                              onChange={(e) => updateInventoryItemQuantity(item.product.id, parseInt(e.target.value) || 0)}
+                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                            />
+                            <span className="text-sm font-medium">
+                              ₱{(item.product.price * item.quantity).toFixed(2)}
+                            </span>
+                            <button
+                              onClick={() => removeInventoryItem(item.product.id)}
+                              className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors text-xs"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="border-t border-gray-300 mt-3 pt-3">
+                        <div className="flex justify-between font-medium">
+                          <span>Products Total:</span>
+                          <span>₱{calculateInventoryItemsTotal().toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Billing Summary */}
               <div className="bg-teal-50 rounded-lg p-4">
                 <h4 className="text-lg font-semibold text-gray-900 mb-3">Billing Summary</h4>
@@ -3144,6 +4470,19 @@ const AdminDashboard: React.FC = () => {
                   ))}
                 </div>
 
+                {/* Inventory Products */}
+                {selectedInventoryItems.length > 0 && (
+                  <div className="mb-4">
+                    <h5 className="font-medium text-gray-700 mb-2">Products Used</h5>
+                    {selectedInventoryItems.map(item => (
+                      <div key={item.product.id} className="flex justify-between text-sm mb-1">
+                        <span>{item.product.name} (x{item.quantity})</span>
+                        <span>₱{(item.product.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Total */}
                 <div className="border-t border-gray-300 pt-3">
                   <div className="flex justify-between text-lg font-bold">
@@ -3155,7 +4494,8 @@ const AdminDashboard: React.FC = () => {
                           .reduce((sum, service) => sum + (parseFloat(service.price) || 0), 0) +
                         appointmentToComplete.pets.reduce((total, pet) => total + calculatePetGroomingTotal(pet.grooming_details), 0) +
                         appointmentToComplete.pets.reduce((total, pet) => total + calculatePetDentalCareTotal(pet.dental_care_details), 0) +
-                        medicalExam.totalCost
+                        medicalExam.totalCost +
+                        calculateInventoryItemsTotal()
                       ).toFixed(2)}
                     </span>
                   </div>
@@ -3292,6 +4632,73 @@ const AdminDashboard: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              {/* Inventory Products Used */}
+              {(selectedPetRecord as any).inventory_usage && (selectedPetRecord as any).inventory_usage.length > 0 && (
+                <div className="bg-purple-50 rounded-lg p-4">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">Products Used</h4>
+                  <div className="space-y-2">
+                    {(selectedPetRecord as any).inventory_usage.map((usage: any, index: number) => (
+                      <div key={index} className="bg-white rounded p-3 flex justify-between items-center">
+                        <div>
+                          <p className="font-medium text-gray-900">{usage.product_name}</p>
+                          <p className="text-sm text-gray-600">
+                            Quantity: {usage.quantity_used} × ₱{parseFloat(usage.unit_price).toFixed(2)}
+                          </p>
+                        </div>
+                        <span className="text-purple-600 font-semibold">₱{parseFloat(usage.total_price).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <div className="flex justify-between items-center font-semibold">
+                      <span className="text-gray-800">Total Products Cost:</span>
+                      <span className="text-purple-600">
+                        ₱{(selectedPetRecord as any).inventory_usage.reduce((total: number, usage: any) => {
+                          return total + (parseFloat(usage.total_price) || 0);
+                        }, 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Total Cost Summary */}
+              <div className="bg-teal-50 rounded-lg p-4">
+                <h4 className="text-lg font-semibold text-gray-900 mb-3">Cost Summary</h4>
+                <div className="space-y-2">
+                  {selectedPetRecord.test_cost && parseFloat(selectedPetRecord.test_cost) > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Medical Tests:</span>
+                      <span className="font-medium">₱{parseFloat(selectedPetRecord.test_cost).toFixed(2)}</span>
+                    </div>
+                  )}
+                  {(selectedPetRecord as any).inventory_usage && (selectedPetRecord as any).inventory_usage.length > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Products Used:</span>
+                      <span className="font-medium">
+                        ₱{(selectedPetRecord as any).inventory_usage.reduce((total: number, usage: any) => {
+                          return total + (parseFloat(usage.total_price) || 0);
+                        }, 0).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="pt-2 border-t border-gray-300">
+                    <div className="flex justify-between text-lg font-bold">
+                      <span className="text-gray-900">Grand Total:</span>
+                      <span className="text-teal-600">
+                        ₱{(
+                          (parseFloat(selectedPetRecord.test_cost) || 0) +
+                          ((selectedPetRecord as any).inventory_usage ? 
+                            (selectedPetRecord as any).inventory_usage.reduce((total: number, usage: any) => {
+                              return total + (parseFloat(usage.total_price) || 0);
+                            }, 0) : 0)
+                        ).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Modal Footer */}
@@ -3338,20 +4745,34 @@ const AdminDashboard: React.FC = () => {
                     <div key={packageName} className="border border-gray-200 rounded-lg p-4">
                       <h5 className="font-medium text-gray-700 mb-3">{packageName}</h5>
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                        {Object.entries(sizes).map(([size, price]) => (
-                          <button
-                            key={`${packageName}-${size}`}
-                            type="button"
-                            onClick={() => {
-                              updateWalkInPetGrooming(currentWalkInPetForGrooming, packageName, size, price, true);
-                              handleWalkInGroomingModalClose();
-                            }}
-                            className="p-3 border border-gray-300 rounded-lg hover:bg-teal-50 hover:border-teal-300 transition-colors text-center"
-                          >
-                            <div className="font-medium text-gray-800">{size}</div>
-                            <div className="text-teal-600 font-semibold">₱{price}</div>
-                          </button>
-                        ))}
+                        {Object.entries(sizes).map(([size, price]) => {
+                          const getWeightRange = (size: string) => {
+                            switch(size) {
+                              case 'X-Small': return '<5kg';
+                              case 'Small': return '5.1-8.5kg';
+                              case 'Medium': return '8.6-17kg';
+                              case 'Large': return '17.1-35kg';
+                              case 'X-Large': return '35.1kg+';
+                              default: return '';
+                            }
+                          };
+                          
+                          return (
+                            <button
+                              key={`${packageName}-${size}`}
+                              type="button"
+                              onClick={() => {
+                                updateWalkInPetGrooming(currentWalkInPetForGrooming, packageName, size, price, true);
+                                handleWalkInGroomingModalClose();
+                              }}
+                              className="p-3 border border-gray-300 rounded-lg hover:bg-teal-50 hover:border-teal-300 transition-colors text-center"
+                            >
+                              <div className="font-medium text-gray-800">{size}</div>
+                              <div className="text-xs text-gray-500 mb-1">({getWeightRange(size)})</div>
+                              <div className="text-teal-600 font-semibold">₱{price}</div>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
@@ -3366,20 +4787,35 @@ const AdminDashboard: React.FC = () => {
                     <div key={serviceName} className="border border-gray-200 rounded-lg p-4">
                       <h5 className="font-medium text-gray-700 mb-3">{serviceName}</h5>
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                        {Object.entries(sizes).map(([size, price]) => (
-                          <button
-                            key={`${serviceName}-${size}`}
-                            type="button"
-                            onClick={() => {
-                              updateWalkInPetGrooming(currentWalkInPetForGrooming, serviceName, size, price, false);
-                              handleWalkInGroomingModalClose();
-                            }}
-                            className="p-3 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors text-center"
-                          >
-                            <div className="font-medium text-gray-800">{size}</div>
-                            <div className="text-blue-600 font-semibold">₱{price}</div>
-                          </button>
-                        ))}
+                        {Object.entries(sizes).map(([size, price]) => {
+                          const getWeightRange = (size: string) => {
+                            switch(size) {
+                              case 'X-Small': return '<5kg';
+                              case 'Small': return '5.1-8.5kg';
+                              case 'Medium': return '8.6-17kg';
+                              case 'Large': return '17.1-35kg';
+                              case 'X-Large': return '35.1kg+';
+                              case 'Any Size': return 'Any Size';
+                              default: return '';
+                            }
+                          };
+                          
+                          return (
+                            <button
+                              key={`${serviceName}-${size}`}
+                              type="button"
+                              onClick={() => {
+                                updateWalkInPetGrooming(currentWalkInPetForGrooming, serviceName, size, price, false);
+                                handleWalkInGroomingModalClose();
+                              }}
+                              className="p-3 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors text-center"
+                            >
+                              <div className="font-medium text-gray-800">{size}</div>
+                              <div className="text-xs text-gray-500 mb-1">({getWeightRange(size)})</div>
+                              <div className="text-blue-600 font-semibold">₱{price}</div>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
@@ -3395,6 +4831,135 @@ const AdminDashboard: React.FC = () => {
                 </p>
                 <button
                   onClick={handleWalkInGroomingModalClose}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Walk-in Dental Care Selection Modal */}
+      {showWalkInDentalCareModal && currentWalkInPetForDentalCare !== null && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-gray-900">
+                  Select Dental Procedure for {walkInData.pets[currentWalkInPetForDentalCare]?.name || `Pet #${currentWalkInPetForDentalCare + 1}`}
+                </h3>
+                <button
+                  onClick={handleWalkInDentalCareModalClose}
+                  className="text-gray-400 hover:text-gray-600 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6">
+              {!selectedWalkInDentalProcedure ? (
+                /* Step 1: Select Procedure */
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Step 1: Select Dental Procedure</h4>
+                  <p className="text-sm text-gray-600 mb-4">Choose a procedure based on your pet's weight category</p>
+                  <div className="space-y-6">
+                    {Object.entries(dentalCareProcedures).map(([procedureName, sizes]) => (
+                      <div key={procedureName} className="border border-gray-200 rounded-lg p-4">
+                        <h5 className="font-medium text-gray-700 mb-3">{procedureName}</h5>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                          {Object.entries(sizes).map(([size, price]) => (
+                            <button
+                              key={`${procedureName}-${size}`}
+                              type="button"
+                              onClick={() => setSelectedWalkInDentalProcedure({procedure: procedureName, size, price})}
+                              className="p-3 border border-gray-300 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors text-center"
+                            >
+                              <div className="font-medium text-gray-800">{size}</div>
+                              <div className="text-blue-600 font-semibold">
+                                {price === 0 ? 'Free' : `₱${price}`}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                /* Step 2: Select Anesthetic */
+                <div>
+                  <div className="bg-blue-50 p-4 rounded-lg mb-6">
+                    <h4 className="text-lg font-semibold text-blue-800 mb-2">Selected Procedure</h4>
+                    <div className="flex justify-between items-center">
+                      <span className="text-blue-700">{selectedWalkInDentalProcedure.procedure} ({selectedWalkInDentalProcedure.size})</span>
+                      <span className="font-semibold text-blue-600">
+                        {selectedWalkInDentalProcedure.price === 0 ? 'Free' : `₱${selectedWalkInDentalProcedure.price}`}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedWalkInDentalProcedure(null)}
+                      className="text-sm text-blue-600 hover:text-blue-800 mt-2"
+                    >
+                      ← Change Procedure
+                    </button>
+                  </div>
+
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">Step 2: Select Anesthetic Type</h4>
+                  <p className="text-sm text-gray-600 mb-4">Choose the appropriate anesthetic for your pet</p>
+                  <div className="space-y-6">
+                    {Object.entries(dentalCareAnesthetics).map(([anestheticType, sizes]) => (
+                      <div key={anestheticType} className="border border-gray-200 rounded-lg p-4">
+                        <h5 className="font-medium text-gray-700 mb-3">{anestheticType} Anesthetic</h5>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                          {Object.entries(sizes).map(([size, price]) => (
+                            <button
+                              key={`${anestheticType}-${size}`}
+                              type="button"
+                              onClick={() => {
+                                updateWalkInPetDentalCare(
+                                  currentWalkInPetForDentalCare,
+                                  selectedWalkInDentalProcedure.procedure,
+                                  selectedWalkInDentalProcedure.size,
+                                  selectedWalkInDentalProcedure.price,
+                                  anestheticType,
+                                  price
+                                );
+                                handleWalkInDentalCareModalClose();
+                              }}
+                              className="p-3 border border-gray-300 rounded-lg hover:bg-green-50 hover:border-green-300 transition-colors text-center"
+                            >
+                              <div className="font-medium text-gray-800">{size}</div>
+                              <div className="text-green-600 font-semibold">₱{price}</div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                Total: ₱{selectedWalkInDentalProcedure.price + price}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4">
+              <div className="flex justify-between items-center">
+                <p className="text-sm text-gray-600">
+                  {!selectedWalkInDentalProcedure ? 
+                    'Select a dental procedure to continue' : 
+                    'Select an anesthetic type to complete the configuration'
+                  }
+                </p>
+                <button
+                  onClick={handleWalkInDentalCareModalClose}
                   className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
                 >
                   Cancel
