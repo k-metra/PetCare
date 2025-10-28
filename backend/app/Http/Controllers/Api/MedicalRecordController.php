@@ -91,18 +91,39 @@ class MedicalRecordController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = DB::table('medical_records');
+            $query = DB::table('medical_records')
+                ->leftJoin('appointments', 'medical_records.appointment_id', '=', 'appointments.id')
+                ->leftJoin('users', 'appointments.user_id', '=', 'users.id')
+                ->select(
+                    'medical_records.*',
+                    'users.name as owner_name',
+                    'users.email as owner_email'
+                );
             
             // Filter by appointment_id if provided
             if ($request->has('appointment_id')) {
-                $query->where('appointment_id', $request->appointment_id);
+                $query->where('medical_records.appointment_id', $request->appointment_id);
             }
             
             $records = $query
-                ->orderBy('created_at', 'desc')
+                ->orderBy('medical_records.created_at', 'desc')
                 ->get()
                 ->map(function ($record) {
                     $record->selected_tests = json_decode($record->selected_tests, true);
+                    
+                    // Get inventory usage for this appointment
+                    $inventoryUsage = DB::table('inventory_usage')
+                        ->join('products', 'inventory_usage.product_id', '=', 'products.id')
+                        ->where('inventory_usage.appointment_id', $record->appointment_id)
+                        ->select(
+                            'inventory_usage.*',
+                            'products.name as product_name',
+                            'products.description as product_description'
+                        )
+                        ->get();
+                    
+                    $record->inventory_usage = $inventoryUsage;
+                    
                     return $record;
                 });
 
