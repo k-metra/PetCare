@@ -7,6 +7,10 @@ use App\Models\Appointment;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\AppointmentConfirmed;
+use App\Mail\AppointmentCancelled;
+use App\Mail\AppointmentRescheduled;
 
 class AdminController extends Controller
 {
@@ -44,14 +48,48 @@ class AdminController extends Controller
             $appointment = Appointment::findOrFail($id);
             
             $request->validate([
-                'status' => 'required|in:pending,confirmed,completed,cancelled'
+                'status' => 'required|in:pending,confirmed,completed,cancelled',
+                'reason' => 'nullable|string|max:500' // Optional reason for cancellation
             ]);
 
+            $oldStatus = $appointment->status;
+            $newStatus = $request->status;
+
             $appointment->update([
-                'status' => $request->status
+                'status' => $newStatus
             ]);
 
             $appointment->load(['user', 'pets', 'services']);
+
+            // Send email notification if status changed and customer needs to be notified
+            if ($oldStatus !== $newStatus && in_array($newStatus, ['confirmed', 'cancelled'])) {
+                try {
+                    if ($newStatus === 'confirmed') {
+                        Mail::to($appointment->user->email)->send(new AppointmentConfirmed($appointment));
+                        \Log::info('Appointment confirmation email sent', [
+                            'appointment_id' => $appointment->id,
+                            'customer_email' => $appointment->user->email,
+                            'status_change' => $oldStatus . ' -> ' . $newStatus
+                        ]);
+                    } elseif ($newStatus === 'cancelled') {
+                        Mail::to($appointment->user->email)->send(new AppointmentCancelled($appointment, $request->reason));
+                        \Log::info('Appointment cancellation email sent', [
+                            'appointment_id' => $appointment->id,
+                            'customer_email' => $appointment->user->email,
+                            'status_change' => $oldStatus . ' -> ' . $newStatus,
+                            'reason' => $request->reason
+                        ]);
+                    }
+                } catch (\Exception $mailException) {
+                    \Log::error('Failed to send appointment status email', [
+                        'appointment_id' => $appointment->id,
+                        'customer_email' => $appointment->user->email,
+                        'status_change' => $oldStatus . ' -> ' . $newStatus,
+                        'error' => $mailException->getMessage()
+                    ]);
+                    // Continue execution - don't fail the status update if email fails
+                }
+            }
 
             return response()->json([
                 'status' => true,
@@ -427,6 +465,23 @@ class AdminController extends Controller
             // Load relationships for response
             $appointment->load(['user', 'pets', 'services']);
 
+            // Send confirmation email for walk-in appointment
+            try {
+                Mail::to($appointment->user->email)->send(new AppointmentConfirmed($appointment));
+                \Log::info('Walk-in appointment confirmation email sent', [
+                    'appointment_id' => $appointment->id,
+                    'customer_email' => $appointment->user->email,
+                    'created_by' => $request->user()->name
+                ]);
+            } catch (\Exception $mailException) {
+                \Log::error('Failed to send walk-in appointment confirmation email', [
+                    'appointment_id' => $appointment->id,
+                    'customer_email' => $appointment->user->email,
+                    'error' => $mailException->getMessage()
+                ]);
+                // Continue execution - don't fail the appointment creation if email fails
+            }
+
             $responseData = [
                 'status' => true,
                 'message' => 'Walk-in appointment created successfully',
@@ -499,7 +554,12 @@ class AdminController extends Controller
             $validatedData = $request->validate([
                 'appointment_date' => 'required|date|after_or_equal:today',
                 'appointment_time' => 'required|string',
+                'reason' => 'nullable|string|max:500' // Optional reason for rescheduling
             ]);
+
+            // Store old date and time for email
+            $oldDate = $appointment->appointment_date;
+            $oldTime = $appointment->appointment_time;
 
             // Check if the selected date is not Sunday
             $selectedDate = new \DateTime($validatedData['appointment_date']);
@@ -517,8 +577,8 @@ class AdminController extends Controller
             \Log::info('Admin rescheduling appointment', [
                 'appointment_id' => $id,
                 'admin_user' => $request->user()->name,
-                'old_date' => $appointment->appointment_date,
-                'old_time' => $appointment->appointment_time,
+                'old_date' => $oldDate,
+                'old_time' => $oldTime,
                 'new_date' => $validatedData['appointment_date'],
                 'new_time' => $validatedData['appointment_time'],
                 'customer' => $appointment->user->name ?? 'Unknown'
@@ -532,6 +592,29 @@ class AdminController extends Controller
             
             // Load relationships for response
             $appointment->load(['user', 'pets', 'services']);
+
+            // Send rescheduling email to customer
+            try {
+                Mail::to($appointment->user->email)->send(
+                    new AppointmentRescheduled($appointment, $oldDate, $oldTime, $request->reason)
+                );
+                \Log::info('Appointment rescheduling email sent', [
+                    'appointment_id' => $appointment->id,
+                    'customer_email' => $appointment->user->email,
+                    'old_date' => $oldDate,
+                    'old_time' => $oldTime,
+                    'new_date' => $appointment->appointment_date,
+                    'new_time' => $appointment->appointment_time,
+                    'reason' => $request->reason
+                ]);
+            } catch (\Exception $mailException) {
+                \Log::error('Failed to send appointment rescheduling email', [
+                    'appointment_id' => $appointment->id,
+                    'customer_email' => $appointment->user->email,
+                    'error' => $mailException->getMessage()
+                ]);
+                // Continue execution - don't fail the reschedule if email fails
+            }
 
             return response()->json([
                 'status' => true,
