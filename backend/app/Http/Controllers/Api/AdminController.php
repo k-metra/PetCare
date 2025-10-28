@@ -625,6 +625,7 @@ class AdminController extends Controller
                 'pets.*.breed' => 'required|string|max:255',
                 'pets.*.name' => 'required|string|max:255',
                 'pets.*.groomingDetails' => 'nullable|array',
+                'pets.*.dentalCareDetails' => 'nullable|array',
                 'services' => 'required|array|min:1',
                 'services.*' => 'string',
                 'notes' => 'nullable|string|max:1000'
@@ -673,7 +674,8 @@ class AdminController extends Controller
                     'type' => $petData['type'],
                     'breed' => $petData['breed'],
                     'name' => $petData['name'],
-                    'grooming_details' => isset($petData['groomingDetails']) ? json_encode($petData['groomingDetails']) : null
+                    'grooming_details' => isset($petData['groomingDetails']) ? json_encode($petData['groomingDetails']) : null,
+                    'dental_care_details' => isset($petData['dentalCareDetails']) ? json_encode($petData['dentalCareDetails']) : null
                 ]);
             }
 
