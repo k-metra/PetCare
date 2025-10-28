@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\MedicalRecordController;
+use App\Http\Controllers\Api\NotificationController;
 
 Route::post('/register', [UserController::class, 'register']);
 
@@ -59,6 +60,10 @@ Route::middleware(['auth:sanctum', 'role:staff,admin'])->group(function () {
         return response()->json(['status' => true, 'message' => 'Test route works', 'user' => $request->user()]);
     });
     
+    // Non-SSE notification routes
+    Route::get('/admin/notifications', [NotificationController::class, 'getNotifications']);
+    Route::delete('/admin/notifications', [NotificationController::class, 'clearNotifications']);
+    
     // Medical Records routes
     Route::post('/medical-records', [MedicalRecordController::class, 'store']);
     Route::get('/medical-records', [MedicalRecordController::class, 'index']);
@@ -71,3 +76,6 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/admin/users', [AdminController::class, 'getAllUsers']);
     Route::put('/admin/users/{id}/role', [AdminController::class, 'updateUserRole']);
 });
+
+// SSE endpoint (handles authentication manually due to SSE limitations)
+Route::get('/admin/notifications/stream', [NotificationController::class, 'stream']);
