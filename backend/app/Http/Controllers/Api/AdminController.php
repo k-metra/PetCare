@@ -25,6 +25,21 @@ class AdminController extends Controller
                 ->orderBy('appointment_time', 'desc')
                 ->get();
 
+            // Add inventory usage to each appointment
+            foreach ($appointments as $appointment) {
+                $inventoryUsage = DB::table('inventory_usage')
+                    ->join('products', 'inventory_usage.product_id', '=', 'products.id')
+                    ->where('inventory_usage.appointment_id', $appointment->id)
+                    ->select(
+                        'inventory_usage.*',
+                        'products.name as product_name',
+                        'products.description as product_description'
+                    )
+                    ->get();
+                
+                $appointment->inventory_usage = $inventoryUsage;
+            }
+
             return response()->json([
                 'status' => true,
                 'appointments' => $appointments
@@ -34,6 +49,170 @@ class AdminController extends Controller
             return response()->json([
                 'status' => false,
                 'message' => 'Failed to retrieve appointments',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get a specific appointment by ID (admin/staff only)
+     */
+    public function getAppointmentById(Request $request, $id)
+    {
+        try {
+            $appointment = Appointment::with(['user', 'pets', 'services'])
+                ->findOrFail($id);
+
+            // Get inventory usage for this appointment
+            $inventoryUsage = DB::table('inventory_usage')
+                ->join('products', 'inventory_usage.product_id', '=', 'products.id')
+                ->where('inventory_usage.appointment_id', $id)
+                ->select(
+                    'inventory_usage.*',
+                    'products.name as product_name',
+                    'products.description as product_description'
+                )
+                ->get();
+
+            // Add inventory usage to appointment data
+            $appointment->inventory_usage = $inventoryUsage;
+
+            return response()->json([
+                'status' => true,
+                'appointment' => $appointment
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to retrieve appointment',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Complete appointment with medical records and inventory updates
+     */
+    public function completeAppointment(Request $request)
+    {
+        try {
+            $request->validate([
+                'appointment_id' => 'required|integer|exists:appointments,id',
+                'doctor_name' => 'nullable|string|max:255',
+                'pet_records' => 'nullable|array',
+                'pet_records.*.petId' => 'required_with:pet_records|integer',
+                'pet_records.*.petName' => 'required_with:pet_records|string',
+                'pet_records.*.weight' => 'nullable|string',
+                'pet_records.*.symptoms' => 'nullable|string',
+                'pet_records.*.diagnosis' => 'nullable|string',
+                'pet_records.*.testType' => 'nullable|string',
+                'pet_records.*.selectedTests' => 'nullable|array',
+                'pet_records.*.medication' => 'nullable|string',
+                'pet_records.*.treatment' => 'nullable|string',
+                'pet_records.*.notes' => 'nullable|string',
+                'total_cost' => 'nullable|numeric',
+                'inventory_items' => 'nullable|array',
+                'inventory_items.*.product_id' => 'required_with:inventory_items|integer|exists:products,id',
+                'inventory_items.*.quantity' => 'required_with:inventory_items|integer|min:1',
+                'inventory_items.*.price' => 'required_with:inventory_items|numeric|min:0'
+            ]);
+
+            DB::beginTransaction();
+
+            $appointmentId = $request->appointment_id;
+
+            // Verify appointment exists and can be completed
+            $appointment = Appointment::findOrFail($appointmentId);
+            if ($appointment->status === 'completed') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Appointment is already completed'
+                ], 400);
+            }
+
+            // Process inventory items first to validate stock
+            if ($request->has('inventory_items') && !empty($request->inventory_items)) {
+                foreach ($request->inventory_items as $item) {
+                    $product = DB::table('products')->find($item['product_id']);
+                    
+                    if (!$product) {
+                        throw new \Exception("Product with ID {$item['product_id']} not found");
+                    }
+                    
+                    if ($product->quantity < $item['quantity']) {
+                        throw new \Exception("Insufficient stock for {$product->name}. Available: {$product->quantity}, Requested: {$item['quantity']}");
+                    }
+                }
+
+                // Update inventory quantities
+                foreach ($request->inventory_items as $item) {
+                    DB::table('products')
+                        ->where('id', $item['product_id'])
+                        ->decrement('quantity', $item['quantity']);
+                    
+                    // Log inventory usage
+                    DB::table('inventory_usage')->insert([
+                        'appointment_id' => $appointmentId,
+                        'product_id' => $item['product_id'],
+                        'quantity_used' => $item['quantity'],
+                        'unit_price' => $item['price'],
+                        'total_price' => $item['quantity'] * $item['price'],
+                        'created_at' => now(),
+                        'updated_at' => now()
+                    ]);
+                }
+            }
+
+            // Save medical records if provided
+            if ($request->has('pet_records') && !empty($request->pet_records)) {
+                foreach ($request->pet_records as $petRecord) {
+                    // Check if this pet has any medical data
+                    $hasMedicalData = !empty($petRecord['weight']) || 
+                                     !empty($petRecord['symptoms']) || 
+                                     !empty($petRecord['diagnosis']) || 
+                                     !empty($petRecord['testType']) || 
+                                     !empty($petRecord['medication']) || 
+                                     !empty($petRecord['treatment']) ||
+                                     !empty($petRecord['selectedTests']);
+
+                    if ($hasMedicalData) {
+                        DB::table('medical_records')->insert([
+                            'appointment_id' => $appointmentId,
+                            'pet_id' => $petRecord['petId'],
+                            'pet_name' => $petRecord['petName'],
+                            'doctor_name' => $request->doctor_name && trim($request->doctor_name) !== '' ? $request->doctor_name : null,
+                            'weight' => $petRecord['weight'] ?? null,
+                            'symptoms' => $petRecord['symptoms'] ?? null,
+                            'medication' => $petRecord['medication'] ?? null,
+                            'treatment' => $petRecord['treatment'] ?? null,
+                            'diagnosis' => $petRecord['diagnosis'] ?? null,
+                            'test_type' => $petRecord['testType'] ?? null,
+                            'selected_tests' => json_encode($petRecord['selectedTests'] ?? []),
+                            'test_cost' => collect($petRecord['selectedTests'] ?? [])->sum('price'),
+                            'notes' => $petRecord['notes'] ?? null,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                    }
+                }
+            }
+
+            // Update appointment status to completed
+            $appointment->update(['status' => 'completed']);
+
+            DB::commit();
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Appointment completed successfully'
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollback();
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to complete appointment',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -334,10 +513,54 @@ class AdminController extends Controller
             $totalAppointments = array_sum($monthlyAppointments);
             $avgMonthlyAppointments = round($totalAppointments / 12, 1);
 
+            // Monthly income for the last 12 months
+            $monthlyIncome = [];
+            for ($i = 11; $i >= 0; $i--) {
+                $date = $currentDate->copy()->subMonths($i);
+                $monthKey = $date->format('M Y');
+                
+                $monthIncome = 0;
+                $monthAppointments = Appointment::with(['services', 'pets'])
+                    ->whereYear('appointment_date', $date->year)
+                    ->whereMonth('appointment_date', $date->month)
+                    ->where('status', 'completed')
+                    ->get();
+
+                foreach ($monthAppointments as $appointment) {
+                    // Add service costs
+                    $monthIncome += $appointment->services->sum('price');
+                    
+                    // Add grooming costs
+                    foreach ($appointment->pets as $pet) {
+                        if ($pet->grooming_details) {
+                            $groomingDetails = is_string($pet->grooming_details) 
+                                ? json_decode($pet->grooming_details, true) 
+                                : $pet->grooming_details;
+                            
+                            if (isset($groomingDetails['price'])) {
+                                $monthIncome += $groomingDetails['price'];
+                            }
+                        }
+                    }
+                    
+                    // Add medical test costs
+                    $medicalRecords = DB::table('medical_records')
+                        ->where('appointment_id', $appointment->id)
+                        ->get();
+                    
+                    foreach ($medicalRecords as $record) {
+                        $monthIncome += $record->test_cost;
+                    }
+                }
+                
+                $monthlyIncome[$monthKey] = $monthIncome;
+            }
+
             return response()->json([
                 'status' => true,
                 'analytics' => [
                     'monthlyAppointments' => $monthlyAppointments,
+                    'monthlyIncome' => $monthlyIncome,
                     'todayEarnings' => $todayEarnings,
                     'monthlyEarnings' => $monthlyEarnings,
                     'avgMonthlyAppointments' => $avgMonthlyAppointments
@@ -726,6 +949,7 @@ class AdminController extends Controller
                     'id' => $customer->id,
                     'name' => $customer->name,
                     'email' => $customer->email,
+                    'phone_number' => $customer->phone_number,
                     'email_verified_at' => $customer->email_verified_at,
                     'created_at' => $customer->created_at,
                     'total_appointments' => $customer->appointments->count(),
