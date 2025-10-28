@@ -124,6 +124,17 @@ export default function UserMenu({ user }: UserMenuProps) {
                             </button>
                         )}
 
+                        {/* Account Settings */}
+                        <button 
+                            className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                            onClick={() => {
+                                setIsOpen(false);
+                                navigate('/account-settings');
+                            }}
+                        >
+                            <FaCog className="text-gray-400" />
+                            Account Settings
+                        </button>
 
                         <hr className="my-1" />
 
