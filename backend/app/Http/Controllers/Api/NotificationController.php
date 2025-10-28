@@ -121,7 +121,7 @@ class NotificationController extends Controller
         $response->headers->set('Content-Type', 'text/event-stream');
         $response->headers->set('Cache-Control', 'no-cache');
         $response->headers->set('Connection', 'keep-alive');
-        $response->headers->set('Access-Control-Allow-Origin', config('app.frontend_url', 'http://localhost:3000'));
+        $response->headers->set('Access-Control-Allow-Origin', config('app.frontend_url'));
         $response->headers->set('Access-Control-Allow-Credentials', 'true');
         $response->headers->set('Access-Control-Allow-Methods', 'GET');
         $response->headers->set('Access-Control-Allow-Headers', 'Cache-Control');
