@@ -20,6 +20,12 @@ Route::get('/email/verify/{id}/{hash}', [UserController::class, 'emailVerificati
 
 Route::post('/email/verification-notification', [UserController::class, 'resendEmailVerification'])->middleware(['throttle:6,1'])->name('verification.send');
 
+Route::post('/email/resend-verification', [UserController::class, 'resendEmailVerificationByEmail'])->middleware(['throttle:6,1']);
+
+// Password Reset routes
+Route::post('/forgot-password', [UserController::class, 'forgotPassword'])->middleware(['throttle:5,1']);
+Route::post('/reset-password', [UserController::class, 'resetPassword'])->middleware(['throttle:5,1']);
+
 // Protected authentication routes
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [UserController::class, 'logout']);
@@ -40,10 +46,18 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware(['auth:sanctum', 'role:staff,admin'])->group(function () {
     Route::get('/admin/appointments', [AdminController::class, 'getAllAppointments']);
     Route::put('/admin/appointments/{id}/status', [AdminController::class, 'updateAppointmentStatus']);
+    Route::put('/admin/appointments/{id}/reschedule', [AdminController::class, 'rescheduleAppointment']);
     Route::delete('/admin/appointments/{id}', [AdminController::class, 'deleteAppointment']);
+    Route::post('/admin/walk-in-appointments', [AdminController::class, 'createWalkInAppointment']);
+    Route::get('/admin/customers', [AdminController::class, 'getAllCustomers']);
     Route::get('/admin/dashboard', [AdminController::class, 'getDashboardStats']);
     Route::get('/admin/analytics', [AdminController::class, 'getAnalytics']);
     Route::get('/admin/recent-appointments', [AdminController::class, 'getRecentAppointments']);
+    
+    // Test route for debugging
+    Route::post('/admin/test', function(Request $request) {
+        return response()->json(['status' => true, 'message' => 'Test route works', 'user' => $request->user()]);
+    });
     
     // Medical Records routes
     Route::post('/medical-records', [MedicalRecordController::class, 'store']);
