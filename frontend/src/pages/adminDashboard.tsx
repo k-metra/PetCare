@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { apiUrl } from '../utils/apiConfig';
 import Header from '../components/header';
+import AdminNotifications from '../components/adminNotifications';
+import { AdminNotificationProvider } from '../contexts/adminNotificationContext';
 import { 
   FaCalendarAlt, 
   FaUsers, 
@@ -40,6 +42,14 @@ interface Pet {
       price: number;
       package: string;
     }>;
+  };
+  dental_care_details?: {
+    procedure: string;
+    size: string;
+    procedurePrice: number;
+    anesthetic: string;
+    anestheticPrice: number;
+    totalPrice: number;
   };
 }
 
@@ -1207,6 +1217,16 @@ const AdminDashboard: React.FC = () => {
     }, 0);
   };
 
+  // Helper function to calculate dental care total for a pet
+  const calculatePetDentalCareTotal = (dentalCareDetails: any) => {
+    if (!dentalCareDetails) return 0;
+    
+    const dentalDetails = typeof dentalCareDetails === 'string' ? 
+      JSON.parse(dentalCareDetails) : dentalCareDetails;
+    
+    return dentalDetails.totalPrice || 0;
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'pending':
@@ -1263,12 +1283,21 @@ const AdminDashboard: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">
-              {user?.role === 'admin' ? 'Admin' : 'Staff'} Dashboard
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Welcome back, {user?.name}! Here's what's happening at PetCare.
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  {user?.role === 'admin' ? 'Admin' : 'Staff'} Dashboard
+                </h1>
+                <p className="text-gray-600 mt-1">
+                  Welcome back, {user?.name}! Here's what's happening at PetCare.
+                </p>
+              </div>
+              
+              {/* Live Notifications */}
+              <div className="flex items-center">
+                <AdminNotifications />
+              </div>
+            </div>
           </div>
 
           {/* Tab Navigation */}
@@ -1488,6 +1517,11 @@ const AdminDashboard: React.FC = () => {
                           {appointment.pets.some(pet => pet.grooming_details && Object.keys(pet.grooming_details).length > 0) && (
                             <div className="text-xs text-teal-600">
                               <strong>Grooming:</strong> {appointment.pets.filter(pet => pet.grooming_details).length} pet(s) with grooming services
+                            </div>
+                          )}
+                          {appointment.pets.some(pet => pet.dental_care_details && Object.keys(pet.dental_care_details).length > 0) && (
+                            <div className="text-xs text-blue-600">
+                              <strong>Dental Care:</strong> {appointment.pets.filter(pet => pet.dental_care_details).length} pet(s) with dental services
                             </div>
                           )}
                         </div>
@@ -2586,6 +2620,47 @@ const AdminDashboard: React.FC = () => {
                           })()}
                         </div>
                       )}
+
+                      {/* Dental Care Details */}
+                      {pet.dental_care_details && (
+                        <div className="mt-4">
+                          <h6 className="font-medium text-gray-900 mb-2">Dental Care Services</h6>
+                          {(() => {
+                            const dentalDetails = typeof pet.dental_care_details === 'string' ? 
+                              JSON.parse(pet.dental_care_details) : pet.dental_care_details;
+                            
+                            return (
+                              <div className="bg-blue-50 rounded p-3">
+                                <div className="space-y-2">
+                                  <div className="flex justify-between items-center text-sm">
+                                    <div>
+                                      <span className="text-gray-700">{dentalDetails.procedure}</span>
+                                      <span className="text-gray-500 ml-2">({dentalDetails.size})</span>
+                                    </div>
+                                    <span className="text-blue-600 font-medium">
+                                      ₱{dentalDetails.procedurePrice}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between items-center text-sm">
+                                    <div>
+                                      <span className="text-gray-700">{dentalDetails.anesthetic} Anesthetic</span>
+                                    </div>
+                                    <span className="text-blue-600 font-medium">
+                                      ₱{dentalDetails.anestheticPrice}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="mt-3 pt-3 border-t border-blue-200">
+                                  <div className="flex justify-between items-center font-semibold">
+                                    <span className="text-gray-800">Pet Dental Care Total:</span>
+                                    <span className="text-blue-600">₱{dentalDetails.totalPrice}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -2688,6 +2763,16 @@ const AdminDashboard: React.FC = () => {
                       </span>
                     </div>
                   )}
+                  {selectedAppointment.pets.some(pet => pet.dental_care_details) && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Dental Care Total:</span>
+                      <span className="font-medium">
+                        ₱{selectedAppointment.pets.reduce((total, pet) => {
+                          return total + calculatePetDentalCareTotal(pet.dental_care_details);
+                        }, 0)}
+                      </span>
+                    </div>
+                  )}
                   {selectedAppointment.status === 'completed' && (selectedAppointment as any).medicalRecords && (selectedAppointment as any).medicalRecords.length > 0 && (
                     <div className="flex justify-between">
                       <span className="text-gray-600">Medical Tests Total:</span>
@@ -2703,10 +2788,13 @@ const AdminDashboard: React.FC = () => {
                       <span className="text-gray-900">Grand Total:</span>
                       <span className="text-teal-600">
                         ₱{selectedAppointment.services
-                          .filter(service => service.name !== 'Pet Grooming')
+                          .filter(service => service.name !== 'Pet Grooming' && service.name !== 'Dental Care')
                           .reduce((sum, service) => sum + (parseFloat(service.price) || 0), 0) +
                           selectedAppointment.pets.reduce((total, pet) => {
                             return total + calculatePetGroomingTotal(pet.grooming_details);
+                          }, 0) +
+                          selectedAppointment.pets.reduce((total, pet) => {
+                            return total + calculatePetDentalCareTotal(pet.dental_care_details);
                           }, 0) +
                           (selectedAppointment.status === 'completed' && (selectedAppointment as any).medicalRecords ? 
                             (selectedAppointment as any).medicalRecords.reduce((total: number, record: any) => {
@@ -3063,9 +3151,10 @@ const AdminDashboard: React.FC = () => {
                     <span className="text-teal-600">
                       ₱{(
                         appointmentToComplete.services
-                          .filter(service => service.name !== 'Pet Grooming')
+                          .filter(service => service.name !== 'Pet Grooming' && service.name !== 'Dental Care')
                           .reduce((sum, service) => sum + (parseFloat(service.price) || 0), 0) +
                         appointmentToComplete.pets.reduce((total, pet) => total + calculatePetGroomingTotal(pet.grooming_details), 0) +
+                        appointmentToComplete.pets.reduce((total, pet) => total + calculatePetDentalCareTotal(pet.dental_care_details), 0) +
                         medicalExam.totalCost
                       ).toFixed(2)}
                     </span>
@@ -3413,4 +3502,21 @@ const AdminDashboard: React.FC = () => {
   );
 };
 
-export default AdminDashboard;
+const AdminDashboardWithNotifications: React.FC = () => {
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      setUser(JSON.parse(userData));
+    }
+  }, []);
+
+  return (
+    <AdminNotificationProvider userRole={user?.role}>
+      <AdminDashboard />
+    </AdminNotificationProvider>
+  );
+};
+
+export default AdminDashboardWithNotifications;
