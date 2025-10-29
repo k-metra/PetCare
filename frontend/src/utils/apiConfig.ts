@@ -53,6 +53,10 @@ export const apiUrl = {
   products: () => getApiUrl('api/products'),
   product: (id: number) => getApiUrl(`api/products/${id}`),
   productQuantity: (id: number) => getApiUrl(`api/products/${id}/quantity`),
+  
+  // Staff Management
+  staff: () => getApiUrl('api/admin/staff'),
+  staffMember: (id: number) => getApiUrl(`api/admin/staff/${id}`),
 };
 
 export default API_BASE_URL;
