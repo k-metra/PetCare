@@ -12,6 +12,7 @@ interface Pet {
   id: number;
   type: 'dog' | 'cat';
   breed: string;
+  customBreed?: string;
   name: string;
   groomingDetails?: {
     category: string;
@@ -445,19 +446,6 @@ const SetAppointment: React.FC = () => {
       showNotification('Please select a date for your appointment.', 'error');
       return;
     }
-    
-    // Check if selected date is tomorrow or later
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    
-    const selectedDateTime = new Date(appointmentData.selectedDate);
-    selectedDateTime.setHours(0, 0, 0, 0);
-    
-    if (selectedDateTime < tomorrow) {
-      showNotification('Please select a date starting from tomorrow. Same-day appointments are not available.', 'error');
-      return;
-    }
     if (!appointmentData.selectedTime) {
       showNotification('Please select a time for your appointment.', 'error');
       return;
@@ -466,8 +454,8 @@ const SetAppointment: React.FC = () => {
       showNotification('Please provide names for all pets.', 'error');
       return;
     }
-    if (appointmentData.pets.some(pet => !pet.breed)) {
-      showNotification('Please specify the breed for all pets.', 'error');
+    if (appointmentData.pets.some(pet => !pet.breed || (pet.breed === 'Other' && !pet.customBreed?.trim()))) {
+      showNotification('Please specify the breed for all pets. If "Other" is selected, please provide the specific breed.', 'error');
       return;
     }
     // Removed mandatory grooming/dental care validation - services are now optional per pet
@@ -521,7 +509,7 @@ const SetAppointment: React.FC = () => {
           
           return {
             type: pet.type,
-            breed: pet.breed,
+            breed: pet.breed === 'Other' && pet.customBreed ? pet.customBreed : pet.breed,
             name: pet.name,
             groomingDetails: formattedGroomingDetails,
             dentalCareDetails: formattedDentalCareDetails
@@ -792,6 +780,23 @@ const SetAppointment: React.FC = () => {
                             <option key={breed} value={breed}>{breed}</option>
                           ))}
                         </select>
+                        
+                        {/* Custom breed input when "Other" is selected */}
+                        {pet.breed === 'Other' && (
+                          <div className="mt-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Specify Breed
+                            </label>
+                            <input
+                              type="text"
+                              value={pet.customBreed || ''}
+                              onChange={(e) => updatePet(index, 'customBreed', e.target.value)}
+                              placeholder="Enter the specific breed"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                              required
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
 
