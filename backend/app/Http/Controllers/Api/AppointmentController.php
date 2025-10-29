@@ -22,7 +22,7 @@ class AppointmentController extends Controller
         try {
             // Validate the request
             $validator = Validator::make($request->all(), [
-                'appointment_date' => 'required|date|after:today',
+                'appointment_date' => 'required|date',
                 'appointment_time' => 'required|string',
                 'pets' => 'required|array|min:1|max:5',
                 'pets.*.type' => 'required|in:dog,cat',
@@ -220,7 +220,7 @@ class AppointmentController extends Controller
 
             // Validate the request
             $validator = Validator::make($request->all(), [
-                'appointment_date' => 'required|date|after:today',
+                'appointment_date' => 'required|date',
                 'appointment_time' => 'required|string',
             ]);
 
