@@ -3,6 +3,9 @@ import { apiUrl } from '../utils/apiConfig';
 import Header from '../components/header';
 import AdminNotifications from '../components/adminNotifications';
 import { AdminNotificationProvider } from '../contexts/adminNotificationContext';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import petMedicsLogo from '../assets/home/pet_medics_logo.png';
 import { 
   FaCalendarAlt, 
   FaUsers, 
@@ -195,6 +198,11 @@ const AdminDashboard: React.FC = () => {
   const [showMedicalModal, setShowMedicalModal] = useState(false);
   const [appointmentToComplete, setAppointmentToComplete] = useState<Appointment | null>(null);
   const [medicalExam, setMedicalExam] = useState<MedicalExamination | null>(null);
+
+  // Helper function to check if user is admin
+  const isAdmin = () => {
+    return user?.role === 'admin';
+  };
   
   // Appointment completion inventory state
   const [selectedInventoryItems, setSelectedInventoryItems] = useState<Array<{
@@ -204,13 +212,27 @@ const AdminDashboard: React.FC = () => {
   const [inventorySearchTerm, setInventorySearchTerm] = useState('');
   const [inventoryFilterCategory, setInventoryFilterCategory] = useState<string>('');
   
-  const [activeTab, setActiveTab] = useState<'appointments' | 'walkIn' | 'customers' | 'petRecords' | 'analytics' | 'inventory'>('appointments');
+  const [activeTab, setActiveTab] = useState<'appointments' | 'walkIn' | 'customers' | 'petRecords' | 'analytics' | 'inventory' | 'staff'>('appointments');
   const [petRecords, setPetRecords] = useState<any[]>([]);
   const [recordsSearchTerm, setRecordsSearchTerm] = useState('');
   const [selectedPetRecord, setSelectedPetRecord] = useState<any | null>(null);
   const [showPetRecordModal, setShowPetRecordModal] = useState(false);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [recentRecords, setRecentRecords] = useState<Appointment[]>([]);
+
+  // Staff Management State
+  const [staffMembers, setStaffMembers] = useState<any[]>([]);
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<any | null>(null);
+  const [staffSearchTerm, setStaffSearchTerm] = useState('');
+  const [staffFormData, setStaffFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    role: 'staff',
+    password: '',
+    confirmPassword: ''
+  });
 
   // Inventory Management State
   const [products, setProducts] = useState<Product[]>([]);
@@ -488,6 +510,13 @@ const AdminDashboard: React.FC = () => {
       fetchProducts();
     }
   }, [activeTab, productSearchTerm, selectedCategory]);
+
+  // Fetch staff data when staff tab is accessed
+  useEffect(() => {
+    if (activeTab === 'staff' && isAdmin()) {
+      fetchStaffMembers();
+    }
+  }, [activeTab]);
 
   const fetchDashboardData = async () => {
     try {
@@ -1174,6 +1203,11 @@ const AdminDashboard: React.FC = () => {
   const addInventoryItem = (product: Product) => {
     const existingItem = selectedInventoryItems.find(item => item.product.id === product.id);
     if (existingItem) {
+      // Check if we can increase quantity
+      if (existingItem.quantity >= product.quantity) {
+        alert(`Cannot add more ${product.name}. Only ${product.quantity} available in stock.`);
+        return;
+      }
       // Increase quantity if already exists
       setSelectedInventoryItems(prev => 
         prev.map(item => 
@@ -1192,6 +1226,13 @@ const AdminDashboard: React.FC = () => {
     if (quantity <= 0) {
       setSelectedInventoryItems(prev => prev.filter(item => item.product.id !== productId));
     } else {
+      // Find the product to check stock
+      const product = products.find(p => p.id === productId);
+      if (product && quantity > product.quantity) {
+        alert(`Cannot set quantity to ${quantity}. Only ${product.quantity} available in stock for ${product.name}.`);
+        return;
+      }
+      
       setSelectedInventoryItems(prev => 
         prev.map(item => 
           item.product.id === productId 
@@ -1710,6 +1751,705 @@ const AdminDashboard: React.FC = () => {
     return dentalDetails.totalPrice || 0;
   };
 
+  // PDF Generation Function
+  const generateAppointmentPDF = async (appointment: any) => {
+    const doc = new jsPDF();
+    let yPosition = 20;
+
+    // Fetch medical records for this appointment
+    let medicalRecords: any[] = [];
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(apiUrl.medicalRecordsByAppointment(appointment.id), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+      const data = await response.json();
+      if (data.status && data.records) {
+        medicalRecords = data.records.filter((record: any) => record.appointment_id === appointment.id);
+      }
+    } catch (error) {
+      console.warn('Could not fetch medical records for PDF:', error);
+    }
+
+    // Header with teal colors
+    doc.setFillColor(20, 184, 166); // Teal-500
+    doc.rect(0, 0, 210, 40, 'F'); // Header background
+    
+    // Add logo if available with proper aspect ratio
+    try {
+      // Create image element to get actual dimensions
+      const img = new Image();
+      img.src = petMedicsLogo;
+      
+      // Wait for image to load to get dimensions
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        // If already loaded (cached), resolve immediately
+        if (img.complete) resolve(img);
+      });
+      
+      const logoHeight = 18; // desired height in mm
+      const aspectRatio = img.width / img.height;
+      const logoWidth = logoHeight * aspectRatio;
+
+      doc.addImage(img, 'PNG', 15, 11, logoWidth, logoHeight);
+    } catch (error) {
+      console.warn('Could not add logo to PDF:', error);
+      // Fallback: white rounded rectangle for logo space
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(15, 11, 35, 18, 3, 3, 'F');
+    }
+    
+    // Subtitle under the logo
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(255, 255, 255); // White text
+    doc.text('Professional Pet Care Services', 15, 33);
+    
+    // Reset text color to black for rest of document
+    doc.setTextColor(0, 0, 0);
+    yPosition = 55;
+
+    // Document title with teal accent
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(20, 184, 166); // Teal-500
+    doc.text('APPOINTMENT SUMMARY REPORT', 105, yPosition, { align: 'center' });
+    doc.setTextColor(0, 0, 0); // Reset to black
+    yPosition += 15;
+
+    // Appointment Details Box with teal border
+    doc.setDrawColor(20, 184, 166); // Teal border
+    doc.setLineWidth(0.5);
+    doc.rect(15, yPosition - 5, 180, 30); // Increased height from 25 to 30
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(20, 184, 166);
+    doc.text('APPOINTMENT DETAILS', 20, yPosition);
+    doc.setTextColor(0, 0, 0);
+    yPosition += 8;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Appointment ID: #${appointment.id}`, 20, yPosition);
+    doc.text(`Date Generated: ${new Date().toLocaleDateString()}`, 120, yPosition);
+    yPosition += 6;
+    doc.text(`Appointment Date: ${new Date(appointment.appointment_date).toLocaleDateString()}`, 20, yPosition);
+    doc.text(`Time: ${appointment.appointment_time}`, 120, yPosition);
+    yPosition += 6;
+    doc.text(`Status: ${appointment.status.toUpperCase()}`, 20, yPosition);
+    yPosition += 15;
+
+    // Customer Information with teal header
+    doc.setFillColor(240, 253, 250); // Very light teal background
+    doc.rect(15, yPosition - 5, 180, 20, 'F');
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(20, 184, 166);
+    doc.text('CUSTOMER INFORMATION', 20, yPosition);
+    doc.setTextColor(0, 0, 0);
+    yPosition += 8;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Name: ${appointment.user?.name || 'N/A'}`, 20, yPosition);
+    yPosition += 6;
+    doc.text(`Email: ${appointment.user?.email || 'N/A'}`, 20, yPosition);
+    yPosition += 6;
+    doc.text(`Phone: ${appointment.user?.phone || 'Not provided'}`, 20, yPosition);
+    yPosition += 15;
+
+    // Pet Information with teal header
+    doc.setFillColor(240, 253, 250);
+    doc.rect(15, yPosition - 5, 180, 8 + (appointment.pets.length * 8), 'F');
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(20, 184, 166);
+    doc.text('PET INFORMATION', 20, yPosition);
+    doc.setTextColor(0, 0, 0);
+    yPosition += 8;
+
+    appointment.pets.forEach((pet: any, index: number) => {
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Pet #${index + 1}: ${pet.name || 'Unnamed'}`, 20, yPosition);
+      yPosition += 6;
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Type: ${pet.type} | Breed: ${pet.breed}`, 25, yPosition);
+      yPosition += 8;
+    });
+    yPosition += 5;
+
+    // Services with teal header
+    doc.setFillColor(240, 253, 250);
+    doc.rect(15, yPosition - 5, 180, 8 + (appointment.services.length * 5), 'F');
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(20, 184, 166);
+    doc.text('SERVICES PROVIDED', 20, yPosition);
+    doc.setTextColor(0, 0, 0);
+    yPosition += 8;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    appointment.services.forEach((service: any) => {
+      doc.text(`• ${service.name}`, 25, yPosition);
+      yPosition += 5;
+    });
+    yPosition += 10;
+
+    // Medical Records (if available) - Enhanced section
+    if (appointment.status === 'completed' && medicalRecords && medicalRecords.length > 0) {
+      // Check if we need a new page
+      if (yPosition > 220) {
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      doc.setFillColor(240, 253, 250);
+      doc.rect(15, yPosition - 5, 180, 25, 'F');
+      
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(20, 184, 166);
+      doc.text('MEDICAL EXAMINATION RESULTS', 20, yPosition);
+      doc.setTextColor(0, 0, 0);
+      yPosition += 8;
+
+      medicalRecords.forEach((record: any, index: number) => {
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(20, 184, 166);
+        doc.text(`Examination #${index + 1}`, 20, yPosition);
+        doc.setTextColor(0, 0, 0);
+        yPosition += 8;
+
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Pet: ${record.pet_name || 'Unknown Pet'}`, 25, yPosition);
+        yPosition += 6;
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        
+        if (record.doctor_name) {
+          doc.text(`Doctor: ${record.doctor_name}`, 25, yPosition);
+          yPosition += 5;
+        }
+        
+        if (record.examination_date) {
+          doc.text(`Examination Date: ${new Date(record.examination_date).toLocaleDateString()}`, 25, yPosition);
+          yPosition += 5;
+        }
+        
+        if (record.weight) {
+          doc.text(`Weight: ${record.weight}`, 25, yPosition);
+          yPosition += 5;
+        }
+        
+        if (record.temperature) {
+          doc.text(`Temperature: ${record.temperature}`, 25, yPosition);
+          yPosition += 5;
+        }
+        
+        if (record.symptoms) {
+          doc.text(`Symptoms:`, 25, yPosition);
+          yPosition += 5;
+          const symptomsLines = doc.splitTextToSize(record.symptoms, 160);
+          doc.text(symptomsLines, 35, yPosition);
+          yPosition += symptomsLines.length * 5;
+        }
+        
+        if (record.diagnosis) {
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(20, 184, 166);
+          doc.text(`Diagnosis:`, 25, yPosition);
+          doc.setTextColor(0, 0, 0);
+          doc.setFont('helvetica', 'normal');
+          yPosition += 5;
+          const diagnosisLines = doc.splitTextToSize(record.diagnosis, 160);
+          doc.text(diagnosisLines, 35, yPosition);
+          yPosition += diagnosisLines.length * 5;
+        }
+        
+        if (record.test_type) {
+          doc.text(`Test Type: ${record.test_type}`, 25, yPosition);
+          yPosition += 5;
+        }
+        
+        if (record.test_result) {
+          doc.text(`Test Result:`, 25, yPosition);
+          yPosition += 5;
+          const testResultLines = doc.splitTextToSize(record.test_result, 160);
+          doc.text(testResultLines, 35, yPosition);
+          yPosition += testResultLines.length * 5;
+        }
+        
+        if (record.test_cost && parseFloat(record.test_cost) > 0) {
+          doc.setTextColor(20, 184, 166);
+          doc.text(`Test Cost: ₱${parseFloat(record.test_cost).toFixed(2)}`, 25, yPosition);
+          doc.setTextColor(0, 0, 0);
+          yPosition += 5;
+        }
+        
+        if (record.medication) {
+          doc.text(`Medication:`, 25, yPosition);
+          yPosition += 5;
+          const medicationLines = doc.splitTextToSize(record.medication, 160);
+          doc.text(medicationLines, 35, yPosition);
+          yPosition += medicationLines.length * 5;
+        }
+        
+        if (record.treatment) {
+          doc.text(`Treatment:`, 25, yPosition);
+          yPosition += 5;
+          const treatmentLines = doc.splitTextToSize(record.treatment, 160);
+          doc.text(treatmentLines, 35, yPosition);
+          yPosition += treatmentLines.length * 5;
+        }
+        
+        if (record.notes) {
+          doc.text(`Notes:`, 25, yPosition);
+          yPosition += 5;
+          const notesLines = doc.splitTextToSize(record.notes, 160);
+          doc.text(notesLines, 35, yPosition);
+          yPosition += notesLines.length * 5;
+        }
+        
+        if (record.follow_up_date) {
+          doc.text(`Follow-up Date: ${new Date(record.follow_up_date).toLocaleDateString()}`, 25, yPosition);
+          yPosition += 5;
+        }
+        
+        yPosition += 8; // Space between records
+
+        // Check if we need a new page
+        if (yPosition > 250 && index < medicalRecords.length - 1) {
+          doc.addPage();
+          yPosition = 20;
+        }
+      });
+    } else if (appointment.status === 'completed') {
+      // Show message when no medical records are available
+      doc.setFillColor(245, 245, 245);
+      doc.rect(15, yPosition - 5, 180, 15, 'F');
+      
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(100, 100, 100);
+      doc.text('No medical examination records available for this appointment.', 20, yPosition + 5);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'normal');
+      yPosition += 20;
+    }
+
+    // Check if we need a new page
+    if (yPosition > 250) {
+      doc.addPage();
+      yPosition = 20;
+    }
+
+    // Grooming Services Detail
+    const groomingPets = appointment.pets.filter((pet: any) => pet.grooming_details && Object.keys(pet.grooming_details).length > 0);
+    if (groomingPets.length > 0) {
+      doc.setFillColor(240, 253, 250);
+      doc.rect(15, yPosition - 5, 180, 20, 'F');
+      
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(20, 184, 166);
+      doc.text('GROOMING SERVICES DETAIL', 20, yPosition);
+      doc.setTextColor(0, 0, 0);
+      yPosition += 8;
+
+      groomingPets.forEach((pet: any) => {
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${pet.name} (${pet.type})`, 20, yPosition);
+        yPosition += 6;
+
+        const groomingDetails = parseGroomingDetails(pet.grooming_details);
+        const hasOldStructure = groomingDetails.category && groomingDetails.size && groomingDetails.price !== undefined;
+
+        if (hasOldStructure) {
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.text(`Service: ${groomingDetails.category}`, 25, yPosition);
+          yPosition += 5;
+          doc.text(`Size: ${groomingDetails.size}`, 25, yPosition);
+          yPosition += 5;
+          doc.setTextColor(20, 184, 166);
+          doc.text(`Price: ₱${groomingDetails.price}`, 25, yPosition);
+          doc.setTextColor(0, 0, 0);
+          yPosition += 5;
+          if (groomingDetails.isPackage) {
+            doc.text('Type: Package', 25, yPosition);
+            yPosition += 5;
+          }
+        } else if (groomingDetails && Object.keys(groomingDetails).length > 0) {
+          Object.entries(groomingDetails).forEach(([category, services]: [string, any]) => {
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Category: ${category}`, 25, yPosition);
+            yPosition += 5;
+            
+            if (Array.isArray(services)) {
+              services.forEach((service: any) => {
+                doc.setFont('helvetica', 'normal');
+                doc.text(`- ${service.service || service.name || 'Unknown Service'} (${service.size || 'N/A'})`, 30, yPosition);
+                doc.setTextColor(20, 184, 166);
+                doc.text(`₱${service.price || 0}`, 160, yPosition);
+                doc.setTextColor(0, 0, 0);
+                yPosition += 5;
+              });
+            }
+          });
+        }
+        yPosition += 5;
+      });
+    }
+
+    // Dental Care Services Detail
+    const dentalPets = appointment.pets.filter((pet: any) => pet.dental_care_details);
+    if (dentalPets.length > 0) {
+      if (yPosition > 220) {
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      doc.setFillColor(240, 253, 250);
+      doc.rect(15, yPosition - 5, 180, 20, 'F');
+      
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(20, 184, 166);
+      doc.text('DENTAL CARE SERVICES DETAIL', 20, yPosition);
+      doc.setTextColor(0, 0, 0);
+      yPosition += 8;
+
+      dentalPets.forEach((pet: any) => {
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${pet.name} (${pet.type})`, 20, yPosition);
+        yPosition += 6;
+
+        const dentalDetails = typeof pet.dental_care_details === 'string' ? 
+          JSON.parse(pet.dental_care_details) : pet.dental_care_details;
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Procedure: ${dentalDetails.procedure}`, 25, yPosition);
+        yPosition += 5;
+        doc.text(`Pet Size: ${dentalDetails.size}`, 25, yPosition);
+        yPosition += 5;
+        doc.setTextColor(20, 184, 166);
+        doc.text(`Procedure Price: ₱${dentalDetails.procedurePrice}`, 25, yPosition);
+        yPosition += 5;
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Anesthetic: ${dentalDetails.anesthetic}`, 25, yPosition);
+        yPosition += 5;
+        doc.setTextColor(20, 184, 166);
+        doc.text(`Anesthetic Price: ₱${dentalDetails.anestheticPrice}`, 25, yPosition);
+        yPosition += 5;
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Total: ₱${dentalDetails.totalPrice}`, 25, yPosition);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        yPosition += 8;
+      });
+    }
+
+    // Products Used (if any)
+    if (appointment.status === 'completed' && (appointment as any).inventory_usage && (appointment as any).inventory_usage.length > 0) {
+      if (yPosition > 220) {
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      doc.setFillColor(240, 253, 250);
+      doc.rect(15, yPosition - 5, 180, 15, 'F');
+      
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(20, 184, 166);
+      doc.text('PRODUCTS USED', 20, yPosition);
+      doc.setTextColor(0, 0, 0);
+      yPosition += 10;
+
+      // Create table for products with teal theme
+      const productData = (appointment as any).inventory_usage.map((usage: any) => [
+        usage.product_name,
+        usage.quantity_used.toString(),
+        `₱${usage.unit_price}`,
+        `₱${usage.total_price}`
+      ]);
+
+      autoTable(doc, {
+        head: [['Product Name', 'Quantity', 'Unit Price', 'Total Price']],
+        body: productData,
+        startY: yPosition,
+        styles: { fontSize: 10 },
+        headStyles: { 
+          fillColor: [20, 184, 166], // Teal header
+          textColor: [255, 255, 255] // White text
+        },
+        alternateRowStyles: { fillColor: [240, 253, 250] }, // Light teal alternate rows
+      });
+
+      yPosition = (doc as any).lastAutoTable.finalY + 10;
+    }
+
+    // Financial Summary with teal theme
+    if (yPosition > 220) {
+      doc.addPage();
+      yPosition = 20;
+    }
+
+    doc.setFillColor(20, 184, 166); // Teal background
+    doc.rect(15, yPosition - 5, 180, 15, 'F'); // Reduced height from 25 to 15
+    
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255); // White text on teal
+    doc.text('BILLING SUMMARY', 20, yPosition + 3); // Adjusted position
+    doc.setTextColor(0, 0, 0);
+    yPosition += 15; // Reduced spacing from 20 to 15
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+
+    // Base services cost
+    const baseServicesTotal = appointment.services
+      .filter((service: any) => service.name !== 'Pet Grooming' && service.name !== 'Dental Care')
+      .reduce((sum: number, service: any) => sum + (parseFloat(service.price) || 0), 0);
+    
+    doc.text(`Base Services:`, 20, yPosition);
+    doc.setTextColor(20, 184, 166);
+    doc.text(`₱${baseServicesTotal.toFixed(2)}`, 160, yPosition);
+    doc.setTextColor(0, 0, 0);
+    yPosition += 6;
+
+    // Grooming total
+    const groomingTotal = appointment.pets.reduce((total: number, pet: any) => {
+      return total + calculatePetGroomingTotal(pet.grooming_details);
+    }, 0);
+    
+    if (groomingTotal > 0) {
+      doc.text(`Grooming Services:`, 20, yPosition);
+      doc.setTextColor(20, 184, 166);
+      doc.text(`₱${groomingTotal.toFixed(2)}`, 160, yPosition);
+      doc.setTextColor(0, 0, 0);
+      yPosition += 6;
+    }
+
+    // Dental care total
+    const dentalTotal = appointment.pets.reduce((total: number, pet: any) => {
+      return total + calculatePetDentalCareTotal(pet.dental_care_details);
+    }, 0);
+    
+    if (dentalTotal > 0) {
+      doc.text(`Dental Care Services:`, 20, yPosition);
+      doc.setTextColor(20, 184, 166);
+      doc.text(`₱${dentalTotal.toFixed(2)}`, 160, yPosition);
+      doc.setTextColor(0, 0, 0);
+      yPosition += 6;
+    }
+
+    // Medical tests total
+    let medicalTestsTotal = 0;
+    if (appointment.status === 'completed' && medicalRecords && medicalRecords.length > 0) {
+      medicalTestsTotal = medicalRecords.reduce((total: number, record: any) => {
+        return total + (parseFloat(record.test_cost) || 0);
+      }, 0);
+      
+      if (medicalTestsTotal > 0) {
+        doc.text(`Medical Tests:`, 20, yPosition);
+        doc.setTextColor(20, 184, 166);
+        doc.text(`₱${medicalTestsTotal.toFixed(2)}`, 160, yPosition);
+        doc.setTextColor(0, 0, 0);
+        yPosition += 6;
+      }
+    }
+
+    // Products total
+    let productsTotal = 0;
+    if (appointment.status === 'completed' && (appointment as any).inventory_usage) {
+      productsTotal = (appointment as any).inventory_usage.reduce((total: number, usage: any) => {
+        return total + (parseFloat(usage.total_price) || 0);
+      }, 0);
+      
+      if (productsTotal > 0) {
+        doc.text(`Products Used:`, 20, yPosition);
+        doc.setTextColor(20, 184, 166);
+        doc.text(`₱${productsTotal.toFixed(2)}`, 160, yPosition);
+        doc.setTextColor(0, 0, 0);
+        yPosition += 6;
+      }
+    }
+
+    // Grand total with teal highlight
+    const grandTotal = baseServicesTotal + groomingTotal + dentalTotal + medicalTestsTotal + productsTotal;
+    
+    yPosition += 5;
+    doc.setFillColor(20, 184, 166);
+    doc.rect(15, yPosition - 3, 180, 12, 'F');
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text(`GRAND TOTAL:`, 20, yPosition + 5);
+    doc.text(`₱${grandTotal.toFixed(2)}`, 160, yPosition + 5);
+
+    // Footer with teal accent
+    yPosition = 280;
+    doc.setFillColor(20, 184, 166);
+    doc.rect(0, yPosition - 5, 210, 20, 'F');
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(255, 255, 255);
+    doc.text('This is a computer-generated document. Thank you for choosing PetMedics Veterinary Clinic.', 105, yPosition + 3, { align: 'center' });
+    doc.text('Email: petmedicsvetclinic21@gmail.com | Phone: +63 968 388 2727', 105, yPosition + 10, { align: 'center' });
+
+    // Save the PDF
+    const filename = `PetMedics_Appointment_${appointment.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(filename);
+  };
+
+  // Staff Management Functions
+  const fetchStaffMembers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(apiUrl.staff(), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (data.status) {
+        setStaffMembers(data.staff || []);
+      } else {
+        showNotification('Failed to fetch staff members', 'error');
+      }
+    } catch (error) {
+      console.error('Error fetching staff members:', error);
+      showNotification('Error fetching staff members', 'error');
+    }
+  };
+
+  const handleStaffSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (staffFormData.password !== staffFormData.confirmPassword) {
+      showNotification('Passwords do not match', 'error');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const url = editingStaff ? apiUrl.staffMember(editingStaff.id) : apiUrl.staff();
+      const method = editingStaff ? 'PUT' : 'POST';
+      
+      const payload = {
+        name: staffFormData.name,
+        email: staffFormData.email,
+        phone: staffFormData.phone,
+        role: staffFormData.role,
+        ...(staffFormData.password && { password: staffFormData.password })
+      };
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (data.status) {
+        showNotification(
+          editingStaff ? 'Staff member updated successfully' : 'Staff member created successfully', 
+          'success'
+        );
+        fetchStaffMembers();
+        setShowStaffModal(false);
+        setEditingStaff(null);
+        setStaffFormData({
+          name: '',
+          email: '',
+          phone: '',
+          role: 'staff',
+          password: '',
+          confirmPassword: ''
+        });
+      } else {
+        showNotification(data.message || 'Failed to save staff member', 'error');
+      }
+    } catch (error) {
+      console.error('Error saving staff member:', error);
+      showNotification('Error saving staff member', 'error');
+    }
+  };
+
+  const handleEditStaff = (staff: any) => {
+    setEditingStaff(staff);
+    setStaffFormData({
+      name: staff.name,
+      email: staff.email,
+      phone: staff.phone || '',
+      role: staff.role,
+      password: '',
+      confirmPassword: ''
+    });
+    setShowStaffModal(true);
+  };
+
+  const handleDeleteStaff = async (staffId: number) => {
+    if (window.confirm('Are you sure you want to delete this staff member?')) {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(apiUrl.staffMember(staffId), {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
+
+        const data = await response.json();
+        if (data.status) {
+          showNotification('Staff member deleted successfully', 'success');
+          fetchStaffMembers();
+        } else {
+          showNotification(data.message || 'Failed to delete staff member', 'error');
+        }
+      } catch (error) {
+        console.error('Error deleting staff member:', error);
+        showNotification('Error deleting staff member', 'error');
+      }
+    }
+  };
+
+  const filteredStaffMembers = staffMembers.filter(staff =>
+    staff.name.toLowerCase().includes(staffSearchTerm.toLowerCase()) ||
+    staff.email.toLowerCase().includes(staffSearchTerm.toLowerCase())
+  );
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'pending':
@@ -1854,16 +2594,19 @@ const AdminDashboard: React.FC = () => {
                 >
                   Pet Records
                 </button>
-                <button
-                  onClick={() => setActiveTab('analytics')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'analytics'
-                      ? 'border-teal-500 text-teal-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Analytics
-                </button>
+                {/* Analytics tab - only visible to admin */}
+                {isAdmin() && (
+                  <button
+                    onClick={() => setActiveTab('analytics')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'analytics'
+                        ? 'border-teal-500 text-teal-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Analytics
+                  </button>
+                )}
                 <button
                   onClick={() => setActiveTab('inventory')}
                   className={`py-2 px-1 border-b-2 font-medium text-sm ${
@@ -1874,12 +2617,25 @@ const AdminDashboard: React.FC = () => {
                 >
                   Inventory
                 </button>
+                {/* Staff Management tab - only visible to admin */}
+                {isAdmin() && (
+                  <button
+                    onClick={() => setActiveTab('staff')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'staff'
+                        ? 'border-teal-500 text-teal-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Staff Management
+                  </button>
+                )}
               </nav>
             </div>
           </div>
 
-          {/* Stats Cards */}
-          {stats && (
+          {/* Stats Cards - Only show on appointments tab */}
+          {stats && activeTab === 'appointments' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
@@ -2061,6 +2817,15 @@ const AdminDashboard: React.FC = () => {
                             <FaEye className="mr-1" />
                             Details
                           </button>
+                          {appointment.status === 'completed' && (
+                            <button
+                              onClick={() => generateAppointmentPDF(appointment)}
+                              className="text-blue-600 hover:text-blue-900 flex items-center"
+                              title="Download PDF Report"
+                            >
+                              📄 PDF
+                            </button>
+                          )}
                           {appointment.status === 'pending' && (
                             <button
                               onClick={() => updateAppointmentStatus(appointment.id, 'confirmed')}
@@ -3006,16 +3771,28 @@ const AdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Analytics Tab */}
+          {/* Analytics Tab - Admin Only */}
           {activeTab === 'analytics' && (
             <div className="space-y-6">
-              {/* Analytics Overview */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-white rounded-lg shadow p-6">
-                  <div className="flex items-center">
-                    <div className="p-2 bg-green-100 rounded-lg">
-                      <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+              {!isAdmin() ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+                  <div className="flex justify-center mb-4">
+                    <svg className="w-12 h-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-red-800 mb-2">Access Restricted</h3>
+                  <p className="text-red-600">Analytics are only available to administrator accounts.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Analytics Overview */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div className="bg-white rounded-lg shadow p-6">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-green-100 rounded-lg">
+                          <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                       </svg>
                     </div>
                     <div className="ml-4">
@@ -3260,6 +4037,8 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 )}
               </div>
+              </>
+              )}
             </div>
           )}
 
@@ -3303,6 +4082,59 @@ const AdminDashboard: React.FC = () => {
                 {/* Products Management */}
                 {inventorySubTab === 'products' && (
                   <div className="p-6">
+                    {/* Stock Status Summary */}
+                    {(() => {
+                      const outOfStock = products.filter(p => p.quantity === 0);
+                      const lowStock = products.filter(p => p.quantity > 0 && p.quantity <= 5);
+                      
+                      if (outOfStock.length > 0 || lowStock.length > 0) {
+                        return (
+                          <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {outOfStock.length > 0 && (
+                              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                <div className="flex items-center">
+                                  <div className="flex-shrink-0">
+                                    <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                    </svg>
+                                  </div>
+                                  <div className="ml-3">
+                                    <h3 className="text-sm font-medium text-red-800">
+                                      {outOfStock.length} Product{outOfStock.length > 1 ? 's' : ''} Out of Stock
+                                    </h3>
+                                    <div className="mt-2 text-sm text-red-700">
+                                      <p>These products are unavailable for appointments.</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {lowStock.length > 0 && (
+                              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                                <div className="flex items-center">
+                                  <div className="flex-shrink-0">
+                                    <svg className="h-5 w-5 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                    </svg>
+                                  </div>
+                                  <div className="ml-3">
+                                    <h3 className="text-sm font-medium text-orange-800">
+                                      {lowStock.length} Product{lowStock.length > 1 ? 's' : ''} Low Stock
+                                    </h3>
+                                    <div className="mt-2 text-sm text-orange-700">
+                                      <p>5 or fewer items remaining. Consider restocking soon.</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
                     {/* Search and Filter Controls */}
                     <div className="flex flex-col md:flex-row gap-4 mb-6">
                       <div className="flex-1">
@@ -3390,7 +4222,23 @@ const AdminDashboard: React.FC = () => {
                                     >
                                       -
                                     </button>
-                                    <span className="min-w-[3rem] text-center text-sm font-medium">{product.quantity}</span>
+                                    <div className="min-w-[5rem] text-center">
+                                      <span className={`text-sm font-medium ${
+                                        product.quantity === 0 
+                                          ? 'text-red-600' 
+                                          : product.quantity <= 5 
+                                          ? 'text-orange-600' 
+                                          : 'text-gray-900'
+                                      }`}>
+                                        {product.quantity}
+                                      </span>
+                                      {product.quantity === 0 && (
+                                        <div className="text-xs text-red-600 font-medium">OUT OF STOCK</div>
+                                      )}
+                                      {product.quantity > 0 && product.quantity <= 5 && (
+                                        <div className="text-xs text-orange-600 font-medium">LOW STOCK</div>
+                                      )}
+                                    </div>
                                     <button
                                       onClick={() => handleUpdateQuantity(product.id, 'increment')}
                                       className="w-8 h-8 flex items-center justify-center bg-green-100 text-green-600 rounded-full hover:bg-green-200 transition-colors"
@@ -3538,8 +4386,271 @@ const AdminDashboard: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Staff Management Tab - Admin Only */}
+          {activeTab === 'staff' && (
+            <div className="space-y-6">
+              {!isAdmin() ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+                  <div className="flex justify-center mb-4">
+                    <svg className="w-12 h-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-red-800 mb-2">Access Restricted</h3>
+                  <p className="text-red-600">Staff management is only available to administrator accounts.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-white rounded-lg shadow">
+                    <div className="p-6 border-b border-gray-200">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">Staff Management</h3>
+                          <p className="text-sm text-gray-600 mt-1">Manage staff accounts and permissions</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setEditingStaff(null);
+                            setStaffFormData({
+                              name: '',
+                              email: '',
+                              phone: '',
+                              role: 'staff',
+                              password: '',
+                              confirmPassword: ''
+                            });
+                            setShowStaffModal(true);
+                          }}
+                          className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition-colors flex items-center"
+                        >
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                          Add Staff Member
+                        </button>
+                      </div>
+
+                      {/* Search Bar */}
+                      <div className="mt-4">
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder="Search staff by name or email..."
+                            value={staffSearchTerm}
+                            onChange={(e) => setStaffSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                          />
+                          <svg className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Staff List */}
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Staff Member
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Role
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Created
+                            </th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {filteredStaffMembers.map((staff) => {
+                            const isCurrentUser = user?.id === staff.id;
+                            return (
+                              <tr key={staff.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <div className="h-10 w-10 rounded-full bg-teal-100 flex items-center justify-center">
+                                      <span className="text-sm font-medium text-teal-800">
+                                        {staff.name.charAt(0).toUpperCase()}
+                                      </span>
+                                    </div>
+                                    <div className="ml-4">
+                                      <div className="text-sm font-medium text-gray-900">
+                                        {staff.name} {isCurrentUser && '(You)'}
+                                      </div>
+                                      <div className="text-sm text-gray-500">{staff.email}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                    staff.role === 'admin' 
+                                      ? 'bg-purple-100 text-purple-800' 
+                                      : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {staff.role}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {new Date(staff.created_at).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  {!isCurrentUser ? (
+                                    <>
+                                      <button
+                                        onClick={() => handleEditStaff(staff)}
+                                        className="text-teal-600 hover:text-teal-900 mr-4"
+                                      >
+                                        Edit
+                                      </button>
+                                      {staff.email !== (process.env.REACT_APP_MAIN_ADMIN_EMAIL || 'admin@petcare.com') && (
+                                        <button
+                                          onClick={() => handleDeleteStaff(staff.id)}
+                                          className="text-red-600 hover:text-red-900"
+                                        >
+                                          Delete
+                                        </button>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="text-gray-400 text-xs">Cannot edit own account</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {filteredStaffMembers.length === 0 && (
+                            <tr>
+                              <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                                No staff members found.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Staff Member Modal */}
+      {showStaffModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {editingStaff ? 'Edit Staff Member' : 'Add New Staff Member'}
+              </h3>
+            </div>
+            <form onSubmit={handleStaffSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={staffFormData.name}
+                  onChange={(e) => setStaffFormData({...staffFormData, name: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                  placeholder="Enter full name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={staffFormData.email}
+                  onChange={(e) => setStaffFormData({...staffFormData, email: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                  placeholder="Enter email address"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  value={staffFormData.phone}
+                  onChange={(e) => setStaffFormData({...staffFormData, phone: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                  placeholder="Enter phone number"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Role
+                </label>
+                <select
+                  value={staffFormData.role}
+                  onChange={(e) => setStaffFormData({...staffFormData, role: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                >
+                  <option value="staff">Staff</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Password {editingStaff && '(leave blank to keep current)'}
+                </label>
+                <input
+                  type="password"
+                  required={!editingStaff}
+                  value={staffFormData.password}
+                  onChange={(e) => setStaffFormData({...staffFormData, password: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                  placeholder="Enter password"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm Password
+                </label>
+                <input
+                  type="password"
+                  required={!editingStaff || Boolean(staffFormData.password)}
+                  value={staffFormData.confirmPassword}
+                  onChange={(e) => setStaffFormData({...staffFormData, confirmPassword: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-teal-500 focus:border-teal-500"
+                  placeholder="Confirm password"
+                />
+              </div>
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowStaffModal(false);
+                    setEditingStaff(null);
+                  }}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition-colors"
+                >
+                  {editingStaff ? 'Update Staff' : 'Add Staff'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Product Modal */}
       {showProductModal && (
@@ -4478,9 +5589,19 @@ const AdminDashboard: React.FC = () => {
                         {getFilteredInventoryProducts().map(product => (
                           <div key={product.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded border">
                             <div className="flex-1">
-                              <div className="font-medium text-sm">{product.name}</div>
-                              <div className="text-xs text-gray-500">
+                              <div className="flex items-center space-x-2">
+                                <div className="font-medium text-sm">{product.name}</div>
+                                {product.quantity <= 5 && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                    LOW STOCK
+                                  </span>
+                                )}
+                              </div>
+                              <div className={`text-xs ${product.quantity <= 5 ? 'text-orange-600' : 'text-gray-500'}`}>
                                 ID: {product.id} | Stock: {product.quantity} | ₱{product.price}
+                                {product.quantity <= 5 && (
+                                  <span className="font-medium"> - Only {product.quantity} left!</span>
+                                )}
                               </div>
                               <div className="text-xs text-gray-400">
                                 {product.category_id ? 
@@ -4514,9 +5635,19 @@ const AdminDashboard: React.FC = () => {
                       {selectedInventoryItems.map(item => (
                         <div key={item.product.id} className="flex items-center justify-between p-2 bg-white rounded border">
                           <div className="flex-1">
-                            <div className="font-medium text-sm">{item.product.name}</div>
-                            <div className="text-xs text-gray-500">
-                              ₱{item.product.price} each
+                            <div className="flex items-center space-x-2">
+                              <div className="font-medium text-sm">{item.product.name}</div>
+                              {item.product.quantity <= 5 && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                  LOW STOCK
+                                </span>
+                              )}
+                            </div>
+                            <div className={`text-xs ${item.product.quantity <= 5 ? 'text-orange-600' : 'text-gray-500'}`}>
+                              ₱{item.product.price} each | Available: {item.product.quantity}
+                              {item.quantity >= item.product.quantity && (
+                                <span className="font-medium text-red-600"> - Using all available stock!</span>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
