@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\MedicalRecordController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\StaffController;
 
 Route::post('/register', [UserController::class, 'register']);
 
@@ -88,6 +89,13 @@ Route::middleware(['auth:sanctum', 'role:staff,admin'])->group(function () {
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::get('/admin/users', [AdminController::class, 'getAllUsers']);
     Route::put('/admin/users/{id}/role', [AdminController::class, 'updateUserRole']);
+    
+    // Staff Management routes
+    Route::get('admin/staff', [StaffController::class, 'index']);
+    Route::post('admin/staff', [StaffController::class, 'store']);
+    Route::get('admin/staff/{id}', [StaffController::class, 'show']);
+    Route::put('admin/staff/{id}', [StaffController::class, 'update']);
+    Route::delete('admin/staff/{id}', [StaffController::class, 'destroy']);
 });
 
 // SSE endpoint (handles authentication manually due to SSE limitations)
