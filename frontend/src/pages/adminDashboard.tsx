@@ -37,6 +37,7 @@ interface Pet {
   id: number;
   type: string;
   breed: string;
+  customBreed?: string;
   name?: string;
   grooming_details?: {
     [category: string]: Array<{
@@ -732,8 +733,8 @@ const AdminDashboard: React.FC = () => {
         return;
       }
       
-      if (walkInData.pets.some(pet => !pet.name.trim() || !pet.breed)) {
-        alert('Please fill in all pet information');
+      if (walkInData.pets.some(pet => !pet.name.trim() || !pet.breed || (pet.breed === 'Other' && !pet.customBreed?.trim()))) {
+        alert('Please fill in all pet information including custom breed when "Other" is selected');
         return;
       }
       
@@ -782,7 +783,7 @@ const AdminDashboard: React.FC = () => {
           
           return {
             type: pet.type,
-            breed: pet.breed,
+            breed: pet.breed === 'Other' && pet.customBreed ? pet.customBreed : pet.breed,
             name: pet.name,
             groomingDetails: formattedGroomingDetails,
             dentalCareDetails: formattedDentalCareDetails
@@ -1752,6 +1753,20 @@ const AdminDashboard: React.FC = () => {
   };
 
   // PDF Generation Function
+  // Helper function to format peso amounts
+  const formatPeso = (amount: number | string): string => {
+    // Convert to number and ensure it's positive
+    let numAmount = Number(amount);
+    if (isNaN(numAmount)) numAmount = 0;
+    
+    // Remove any signs and format as peso
+    const cleanAmount = Math.abs(numAmount);
+    const formattedAmount = cleanAmount.toFixed(2);
+    
+    // Use 'P' instead of peso symbol to avoid encoding issues
+    return `P${formattedAmount}`;
+  };
+
   const generateAppointmentPDF = async (appointment: any) => {
     const doc = new jsPDF();
     let yPosition = 20;
@@ -1997,7 +2012,7 @@ const AdminDashboard: React.FC = () => {
         
         if (record.test_cost && parseFloat(record.test_cost) > 0) {
           doc.setTextColor(20, 184, 166);
-          doc.text(`Test Cost: ₱${parseFloat(record.test_cost).toFixed(2)}`, 25, yPosition);
+          doc.text(`Test Cost: ${formatPeso(record.test_cost)}`, 25, yPosition);
           doc.setTextColor(0, 0, 0);
           yPosition += 5;
         }
@@ -2235,7 +2250,7 @@ const AdminDashboard: React.FC = () => {
     
     doc.text(`Base Services:`, 20, yPosition);
     doc.setTextColor(20, 184, 166);
-    doc.text(`₱${baseServicesTotal.toFixed(2)}`, 160, yPosition);
+    doc.text(formatPeso(baseServicesTotal), 160, yPosition);
     doc.setTextColor(0, 0, 0);
     yPosition += 6;
 
@@ -2247,7 +2262,7 @@ const AdminDashboard: React.FC = () => {
     if (groomingTotal > 0) {
       doc.text(`Grooming Services:`, 20, yPosition);
       doc.setTextColor(20, 184, 166);
-      doc.text(`₱${groomingTotal.toFixed(2)}`, 160, yPosition);
+      doc.text(formatPeso(groomingTotal), 160, yPosition);
       doc.setTextColor(0, 0, 0);
       yPosition += 6;
     }
@@ -2260,7 +2275,7 @@ const AdminDashboard: React.FC = () => {
     if (dentalTotal > 0) {
       doc.text(`Dental Care Services:`, 20, yPosition);
       doc.setTextColor(20, 184, 166);
-      doc.text(`₱${dentalTotal.toFixed(2)}`, 160, yPosition);
+      doc.text(formatPeso(dentalTotal), 160, yPosition);
       doc.setTextColor(0, 0, 0);
       yPosition += 6;
     }
@@ -2275,7 +2290,7 @@ const AdminDashboard: React.FC = () => {
       if (medicalTestsTotal > 0) {
         doc.text(`Medical Tests:`, 20, yPosition);
         doc.setTextColor(20, 184, 166);
-        doc.text(`₱${medicalTestsTotal.toFixed(2)}`, 160, yPosition);
+        doc.text(formatPeso(medicalTestsTotal), 160, yPosition);
         doc.setTextColor(0, 0, 0);
         yPosition += 6;
       }
@@ -2291,7 +2306,7 @@ const AdminDashboard: React.FC = () => {
       if (productsTotal > 0) {
         doc.text(`Products Used:`, 20, yPosition);
         doc.setTextColor(20, 184, 166);
-        doc.text(`₱${productsTotal.toFixed(2)}`, 160, yPosition);
+        doc.text(formatPeso(productsTotal), 160, yPosition);
         doc.setTextColor(0, 0, 0);
         yPosition += 6;
       }
@@ -2308,7 +2323,7 @@ const AdminDashboard: React.FC = () => {
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(255, 255, 255);
     doc.text(`GRAND TOTAL:`, 20, yPosition + 5);
-    doc.text(`₱${grandTotal.toFixed(2)}`, 160, yPosition + 5);
+    doc.text(formatPeso(grandTotal), 160, yPosition + 5);
 
     // Footer with teal accent
     yPosition = 280;
@@ -3129,6 +3144,27 @@ const AdminDashboard: React.FC = () => {
                                   <option key={breed} value={breed}>{breed}</option>
                                 ))}
                               </select>
+                              
+                              {/* Custom breed input when "Other" is selected */}
+                              {pet.breed === 'Other' && (
+                                <div className="mt-2">
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Specify Breed
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={pet.customBreed || ''}
+                                    onChange={(e) => {
+                                      const updatedPets = [...walkInData.pets];
+                                      updatedPets[index] = { ...updatedPets[index], customBreed: e.target.value };
+                                      setWalkInData(prev => ({ ...prev, pets: updatedPets }));
+                                    }}
+                                    placeholder="Enter the specific breed"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                                    required
+                                  />
+                                </div>
+                              )}
                             </div>
                           </div>
 
