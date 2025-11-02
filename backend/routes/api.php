@@ -1,7 +1,5 @@
 <?php
 
-namespace App\Http\Controllers\Api;
-
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -48,6 +46,39 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/appointments/{id}', [AppointmentController::class, 'update']);
     Route::put('/appointments/{id}/cancel', [AppointmentController::class, 'cancel']);
     Route::get('/services', [AppointmentController::class, 'getServices']);
+    Route::get('/appointments/available-slots', [AppointmentController::class, 'getAvailableTimeSlots']);
+    
+    // Debug route to check appointment limits
+    Route::get('/debug/appointments', function(Request $request) {
+        $date = $request->get('date', now()->format('Y-m-d'));
+        $time = $request->get('time', '9:00 AM');
+        
+        $maxAppointmentsPerSlot = config('appointments.max_appointments_per_slot', 3);
+        $existingAppointments = \App\Models\Appointment::where('appointment_date', $date)
+            ->where('appointment_time', $time)
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->count();
+            
+        $allAppointments = \App\Models\Appointment::where('appointment_date', $date)
+            ->where('appointment_time', $time)
+            ->with('user')
+            ->get();
+            
+        return response()->json([
+            'date' => $date,
+            'time' => $time,
+            'max_appointments_per_slot' => $maxAppointmentsPerSlot,
+            'existing_appointments_count' => $existingAppointments,
+            'appointments' => $allAppointments->map(function($apt) {
+                return [
+                    'id' => $apt->id,
+                    'user' => $apt->user->name,
+                    'status' => $apt->status,
+                    'created_at' => $apt->created_at
+                ];
+            })
+        ]);
+    });
 });
 
 // Admin/Staff routes (require staff or admin role)
