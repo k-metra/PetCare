@@ -13,6 +13,8 @@ class ContactFormMail extends Mailable
 {
     use Queueable, SerializesModels;
 
+    public $contactFormData;
+
     /**
      * Create a new message instance.
      */
@@ -33,7 +35,8 @@ class ContactFormMail extends Mailable
 
     public function build() {
         return $this->subject('Contact Form Mail - PetMedics Veterinary Clinic')
-                    ->view('emails.contact-form');
+                    ->view('emails.contact-form')
+                    ->with(['contactFormData' => $this->contactFormData]);
     }
 
     /**
