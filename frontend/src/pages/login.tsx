@@ -187,7 +187,7 @@ export default function Login() {
             <img src={home_image} alt="Home Image" className="w-full absolute h-full object-cover mt-16"></img>
 
             <div className="bg-gradient-to-tr from-[#019789] to-[#13AAAB] p-8 px-10 rounded-lg drop-shadow-lg relative w-full max-w-md mx-auto">
-                <h1 className="text-3xl text-center font-bold text-white">Welcome back!</h1>
+                <h1 className="text-3xl text-center font-bold text-white">Welcome!</h1>
                 
                 {error !== '' && (
                     <div className="mt-5">
