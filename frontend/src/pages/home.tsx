@@ -53,8 +53,7 @@ export default function Home() {
                 if (e.currentTarget) e.currentTarget.reset();
                 
             } else {
-                const errorData = await res.json();
-                alert(`Error: ${errorData.message || 'Failed to send message.'}`);
+                alert(`Error: ${responseData.message || 'Failed to send message.'}`);
             }
         }).catch((err) => {
             alert(`Error: ${err.message || 'Failed to send message.'}`);
