@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\StaffController;
+use App\Http\Controllers\Api\ContactFormController;
 
 Route::post('/register', [UserController::class, 'register']);
 
@@ -27,6 +28,9 @@ Route::post('/email/resend-verification', [UserController::class, 'resendEmailVe
 // Password Reset routes
 Route::post('/forgot-password', [UserController::class, 'forgotPassword'])->middleware(['throttle:5,1']);
 Route::post('/reset-password', [UserController::class, 'resetPassword'])->middleware(['throttle:5,1']);
+
+// Contact Form
+Route::post('/contact', [ContactFormController::class, 'mail']);
 
 // Protected authentication routes
 Route::middleware('auth:sanctum')->group(function () {
