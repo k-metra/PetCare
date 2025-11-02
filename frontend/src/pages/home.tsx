@@ -20,13 +20,47 @@ import { useNavigate } from "react-router-dom"
 import Product from "../components/product"
 
 import { productsList } from "../config/ProductsList"
+import { useState } from "react"
 
 export default function Home() {
+    const [loading, setLoading] = useState(false);
 
     const navigate = useNavigate();
+    const apiUrl = process.env.REACT_APP_API_URL;
 
     const handleAppointmentClick =() => {
         navigate('/set-appointment');
+    }
+
+    const onContactSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+
+        setLoading(true);
+        const formData = Object.fromEntries(new FormData(e.currentTarget).entries());
+
+        await fetch(`${apiUrl}/api/contact`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData),
+        })
+        .then(async (res) => {
+            const responseData = await res.json();
+            if (res.ok) {
+                alert(responseData.message);
+
+                if (e.currentTarget) e.currentTarget.reset();
+                
+            } else {
+                const errorData = await res.json();
+                alert(`Error: ${errorData.message || 'Failed to send message.'}`);
+            }
+        }).catch((err) => {
+            alert(`Error: ${err.message || 'Failed to send message.'}`);
+        }).finally(() => {
+            setLoading(false);
+        })
     }
 
     return (
@@ -157,7 +191,7 @@ export default function Home() {
                             </div>
                         </div>
                         <div className="flex flex-col w-full md:w-3/4">
-                            <form>
+                            <form onSubmit={onContactSubmit}>
                                 <div className="flex flex-col text-left mb-4">
                                     <label htmlFor="name" className="mb-2">Name *</label>
                                     <input type="text" id="name" name="name" placeholder="Enter your name" className="w-full p-3 font-light text-sm border border-gray-300 bg-black/5 rounded-md" required/>
@@ -174,7 +208,9 @@ export default function Home() {
                                 <motion.button
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.95 }}
-                                className="mt-4 md:mt-0 bg-brand-primary-500 hover:bg-brand-primary-600 text-white font-semibold py-3 px-6 text-lg rounded-md shadow-lg transition-all duration-200 ease-out">Send Message</motion.button>
+                                    type="submit"
+                                    disabled={loading}
+                                className="disabled:cursor-not-allowed cursor-pointer mt-4 md:mt-0 bg-brand-primary-500 hover:bg-brand-primary-600 disabled:bg-brand-primary-900 text-white font-semibold py-3 px-6 text-lg rounded-md shadow-lg transition-all duration-200 ease-out">{`${loading ? 'Sending...' : 'Send Message'}`}</motion.button>
                             </form>                        
                         </div>
                     </div>
