@@ -9,13 +9,6 @@ use App\Mail\ContactFormMail;
 
 class ContactFormController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
-    {
-        //
-    }
 
     /**
      * Store a newly created resource in storage.
@@ -28,7 +21,11 @@ class ContactFormController extends Controller
             'message' => 'required|string',
         ]);
 
-        Mail::to('petmedics.noreply@gmail.com')->send(new ContactFormMail($validated_data));
+        try {
+            Mail::to('petmedics.noreply@gmail.com')->send(new ContactFormMail($validated_data));
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Failed to send contact form.' . $e->getMessage()], 500);
+        }
 
         return response()->json(['message' => 'Contact form submitted successfully.'], 200);
     }
