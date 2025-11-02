@@ -631,6 +631,23 @@ class AdminController extends Controller
                 'notes' => 'nullable|string|max:1000'
             ]);
 
+            // Check if the time slot is not fully booked
+            $maxAppointmentsPerSlot = config('appointments.max_appointments_per_slot', 3);
+            $existingAppointments = Appointment::where('appointment_date', $validatedData['appointment_date'])
+                ->where('appointment_time', $validatedData['appointment_time'])
+                ->whereIn('status', ['pending', 'confirmed'])
+                ->count();
+
+            if ($existingAppointments >= $maxAppointmentsPerSlot) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'This time slot is fully booked. Please select a different time.',
+                    'error_type' => 'slot_full',
+                    'available_slots' => $existingAppointments,
+                    'max_slots' => $maxAppointmentsPerSlot
+                ], 422);
+            }
+
             // Find or create user
             $user = User::where('email', $validatedData['customer_email'])->first();
             $nameWarning = null;
