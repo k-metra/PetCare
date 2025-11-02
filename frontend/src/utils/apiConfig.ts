@@ -25,6 +25,7 @@ export const apiUrl = {
   appointments: () => getApiUrl('api/appointments'),
   appointment: (id: number) => getApiUrl(`api/appointments/${id}`),
   cancelAppointment: (id: number) => getApiUrl(`api/appointments/${id}/cancel`),
+  availableTimeSlots: () => getApiUrl('api/appointments/available-slots'),
   adminAppointments: () => getApiUrl('api/admin/appointments'),
   appointmentStatus: (id: number) => getApiUrl(`api/admin/appointments/${id}/status`),
   rescheduleAppointment: (id: number) => getApiUrl(`api/admin/appointments/${id}/reschedule`),
