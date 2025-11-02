@@ -11,7 +11,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\StaffController;
-use App\Http\Controllers\Api\ContactFormController;
+use App\Http\Controllers\ContactFormController;
 
 Route::post('/register', [UserController::class, 'register']);
 
