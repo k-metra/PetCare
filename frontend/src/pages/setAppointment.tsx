@@ -37,6 +37,14 @@ interface AppointmentData {
   services: string[];
 }
 
+interface TimeSlot {
+  time: string;
+  available: boolean;
+  booked_count: number;
+  max_capacity: number;
+  remaining_slots: number;
+}
+
 const SetAppointment: React.FC = () => {
   const navigate = useNavigate();
   const { showNotification } = useNotification();
@@ -50,6 +58,8 @@ const SetAppointment: React.FC = () => {
 
   const [petCount, setPetCount] = useState<number>(1);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([]);
+  const [isLoadingTimeSlots, setIsLoadingTimeSlots] = useState<boolean>(false);
 
   // Available time slots from 8 AM to 3 PM
   const timeSlots = [
@@ -264,8 +274,79 @@ const SetAppointment: React.FC = () => {
     setConfirmModalData(null);
   };
 
+  // Function to fetch available time slots for a given date
+  const fetchAvailableTimeSlots = async (date: Date) => {
+    try {
+      setIsLoadingTimeSlots(true);
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        showNotification('Please login to check available time slots.', 'error');
+        return;
+      }
+
+      // Format date without timezone conversion to prevent day shifting
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateString = `${year}-${month}-${day}`; // Format as YYYY-MM-DD
+      
+      const response = await fetch(`${apiUrl.availableTimeSlots()}?date=${dateString}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      
+      if (data.status) {
+        setAvailableTimeSlots(data.available_slots);
+        
+        // If currently selected time is no longer available, clear it
+        if (appointmentData.selectedTime) {
+          const selectedSlot = data.available_slots.find((slot: TimeSlot) => slot.time === appointmentData.selectedTime);
+          if (selectedSlot && !selectedSlot.available) {
+            setAppointmentData(prev => ({ ...prev, selectedTime: '' }));
+            showNotification('Your previously selected time slot is now fully booked. Please select a different time.', 'warning');
+          }
+        }
+      } else {
+        console.error('Failed to fetch available time slots:', data.message);
+        // Reset to default time slots if API fails
+        setAvailableTimeSlots(timeSlots.map(time => ({
+          time,
+          available: true,
+          booked_count: 0,
+          max_capacity: 3,
+          remaining_slots: 3
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching available time slots:', error);
+      // Reset to default time slots if fetch fails
+      setAvailableTimeSlots(timeSlots.map(time => ({
+        time,
+        available: true,
+        booked_count: 0,
+        max_capacity: 3,
+        remaining_slots: 3
+      })));
+    } finally {
+      setIsLoadingTimeSlots(false);
+    }
+  };
+
   const handleDateSelect = (date: Date | undefined) => {
-    setAppointmentData(prev => ({ ...prev, selectedDate: date }));
+    setAppointmentData(prev => ({ ...prev, selectedDate: date, selectedTime: '' }));
+    
+    // Fetch available time slots for the selected date
+    if (date) {
+      fetchAvailableTimeSlots(date);
+    } else {
+      setAvailableTimeSlots([]);
+    }
   };
 
   const handleTimeSelect = (time: string) => {
@@ -476,7 +557,13 @@ const SetAppointment: React.FC = () => {
 
       // Format the data for the API
       const appointmentPayload = {
-        appointment_date: appointmentData.selectedDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
+        appointment_date: (() => {
+          // Format date without timezone conversion to prevent day shifting
+          const year = appointmentData.selectedDate.getFullYear();
+          const month = String(appointmentData.selectedDate.getMonth() + 1).padStart(2, '0');
+          const day = String(appointmentData.selectedDate.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`; // Format as YYYY-MM-DD
+        })(),
         appointment_time: appointmentData.selectedTime,
         pets: appointmentData.pets.map(pet => {
           let formattedGroomingDetails = null;
@@ -558,6 +645,7 @@ const SetAppointment: React.FC = () => {
           services: []
         });
         setPetCount(1);
+        setAvailableTimeSlots([]); // Clear available slots
         
         // Navigate to My Appointments page
         navigate('/my-appointments');
@@ -567,6 +655,26 @@ const SetAppointment: React.FC = () => {
           showNotification('Appointment scheduled successfully! 🎉', 'success', 6000);
         }, 100);
       } else {
+        // Handle specific error types
+        if (data.error_type === 'slot_full') {
+          // Handle fully booked slot
+          showNotification(
+            `This time slot is fully booked (${data.available_slots}/${data.max_slots} appointments). Please select a different time.`,
+            'error',
+            8000
+          );
+          
+          // Refresh available slots for the selected date
+          if (appointmentData.selectedDate) {
+            fetchAvailableTimeSlots(appointmentData.selectedDate);
+          }
+          
+          // Clear selected time
+          setAppointmentData(prev => ({ ...prev, selectedTime: '' }));
+          
+          return;
+        }
+        
         // Handle validation errors
         if (data.errors) {
           // Show specific validation error messages
@@ -688,23 +796,110 @@ const SetAppointment: React.FC = () => {
             {/* Time Selection */}
             <div>
               <h2 className="text-xl font-semibold text-gray-800 mb-4">Select Time</h2>
-              <p className="text-sm text-gray-600 mb-3">Clinic hours: 8:00 AM - 5:00 PM (Appointments available until 3:00 PM)</p>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                {timeSlots.map((time) => (
-                  <button
-                    key={time}
-                    type="button"
-                    onClick={() => handleTimeSelect(time)}
-                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                      appointmentData.selectedTime === time
-                        ? 'bg-teal-600 text-white border-teal-600'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    {time}
-                  </button>
-                ))}
-              </div>
+              <p className="text-sm text-gray-600 mb-3">
+                Clinic hours: 8:00 AM - 5:00 PM (Appointments available until 3:00 PM)
+                {appointmentData.selectedDate && (
+                  <span className="block mt-1 text-teal-600">
+                    Showing availability for {appointmentData.selectedDate.toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </span>
+                )}
+              </p>
+              
+              {isLoadingTimeSlots && (
+                <div className="text-center py-4">
+                  <div className="inline-flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-teal-600 mr-2"></div>
+                    <span className="text-gray-600">Loading available time slots...</span>
+                  </div>
+                </div>
+              )}
+              
+              {!appointmentData.selectedDate && (
+                <div className="text-center py-8 text-gray-500">
+                  <p>Please select a date first to view available time slots</p>
+                </div>
+              )}
+              
+              {appointmentData.selectedDate && !isLoadingTimeSlots && (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                  {availableTimeSlots.length > 0 ? (
+                    availableTimeSlots.map((slot) => (
+                      <div key={slot.time} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => slot.available ? handleTimeSelect(slot.time) : null}
+                          disabled={!slot.available}
+                          className={`w-full px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                            appointmentData.selectedTime === slot.time
+                              ? 'bg-teal-600 text-white border-teal-600'
+                              : slot.available
+                              ? 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                              : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                          }`}
+                        >
+                          {slot.time}
+                        </button>
+                        
+                        {/* Show remaining slots info */}
+                        {slot.available && slot.remaining_slots <= 2 && (
+                          <div className="absolute -top-1 -right-1 bg-amber-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                            {slot.remaining_slots}
+                          </div>
+                        )}
+                        
+                        {/* Show fully booked indicator */}
+                        {!slot.available && (
+                          <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center">
+                            ✕
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    // Fallback to default time slots if API fails
+                    timeSlots.map((time) => (
+                      <button
+                        key={time}
+                        type="button"
+                        onClick={() => handleTimeSelect(time)}
+                        className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                          appointmentData.selectedTime === time
+                            ? 'bg-teal-600 text-white border-teal-600'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {time}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+              
+              {/* Legend */}
+              {appointmentData.selectedDate && !isLoadingTimeSlots && availableTimeSlots.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-600">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-teal-600 rounded mr-2"></div>
+                    <span>Selected</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-white border border-gray-300 rounded mr-2"></div>
+                    <span>Available</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-amber-500 rounded mr-2"></div>
+                    <span>Limited slots (number shows remaining)</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-gray-100 rounded mr-2"></div>
+                    <span>Fully booked</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Pet Details */}
