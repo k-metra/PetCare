@@ -11,7 +11,6 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\StaffController;
-use App\Http\Controllers\ContactFormController;
 
 Route::post('/register', [UserController::class, 'register']);
 
@@ -28,9 +27,6 @@ Route::post('/email/resend-verification', [UserController::class, 'resendEmailVe
 // Password Reset routes
 Route::post('/forgot-password', [UserController::class, 'forgotPassword'])->middleware(['throttle:5,1']);
 Route::post('/reset-password', [UserController::class, 'resetPassword'])->middleware(['throttle:5,1']);
-
-// Contact Form
-Route::post('/contact', [ContactFormController::class, 'mail']);
 
 // Protected authentication routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -51,6 +47,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/appointments/{id}/cancel', [AppointmentController::class, 'cancel']);
     Route::get('/services', [AppointmentController::class, 'getServices']);
     Route::get('/appointments/available-slots', [AppointmentController::class, 'getAvailableTimeSlots']);
+    Route::get('/appointments/vaccines', [AppointmentController::class, 'getAvailableVaccines']);
     
     // Debug route to check appointment limits
     Route::get('/debug/appointments', function(Request $request) {
@@ -91,6 +88,7 @@ Route::middleware(['auth:sanctum', 'role:staff,admin'])->group(function () {
     Route::get('/admin/appointments/{id}', [AdminController::class, 'getAppointmentById']);
     Route::put('/admin/appointments/{id}/status', [AdminController::class, 'updateAppointmentStatus']);
     Route::put('/admin/appointments/{id}/reschedule', [AdminController::class, 'rescheduleAppointment']);
+    Route::put('/admin/appointments/{id}/edit', [AppointmentController::class, 'adminUpdate']);
     Route::delete('/admin/appointments/{id}', [AdminController::class, 'deleteAppointment']);
     Route::post('/admin/appointments/complete', [AdminController::class, 'completeAppointment']);
     Route::post('/admin/walk-in-appointments', [AdminController::class, 'createWalkInAppointment']);
