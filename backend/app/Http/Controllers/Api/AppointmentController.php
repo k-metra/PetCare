@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\Service;
+use App\Models\Category;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -50,6 +52,10 @@ class AppointmentController extends Controller
                 'pets.*.dentalCareDetails.anesthetic' => 'required_with:pets.*.dentalCareDetails|string',
                 'pets.*.dentalCareDetails.anestheticPrice' => 'required_with:pets.*.dentalCareDetails|numeric',
                 'pets.*.dentalCareDetails.totalPrice' => 'required_with:pets.*.dentalCareDetails|numeric',
+                'pets.*.vaccineDetails' => 'nullable|array',
+                'pets.*.vaccineDetails.*.id' => 'required|integer|exists:products,id',
+                'pets.*.vaccineDetails.*.name' => 'required|string',
+                'pets.*.vaccineDetails.*.price' => 'required|numeric',
                 'services' => 'required|array|min:1',
                 'services.*' => 'required|string',
                 'notes' => 'nullable|string'
@@ -157,7 +163,8 @@ class AppointmentController extends Controller
                     'breed' => $petData['breed'],
                     'name' => $petData['name'],
                     'grooming_details' => $petData['groomingDetails'] ?? null,
-                    'dental_care_details' => $petData['dentalCareDetails'] ?? null
+                    'dental_care_details' => $petData['dentalCareDetails'] ?? null,
+                    'vaccine_details' => $petData['vaccineDetails'] ?? null
                 ]);
             }
 
@@ -465,6 +472,206 @@ class AppointmentController extends Controller
     }
 
     /**
+     * Admin/Staff update appointment with full editing capabilities
+     */
+    public function adminUpdate(Request $request, $id)
+    {
+        try {
+            // Only allow admin/staff to use this endpoint
+            if (!$request->user() || !in_array($request->user()->role, ['admin', 'staff'])) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized. Only admin and staff can edit appointments.'
+                ], 403)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+            }
+
+            // Find the appointment
+            $appointment = Appointment::with(['pets', 'services'])->findOrFail($id);
+            
+            // Only allow editing of pending and confirmed appointments
+            if ($appointment->status === 'completed') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Completed appointments cannot be edited'
+                ], 400)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+            }
+
+            // Validate the request
+            $validator = Validator::make($request->all(), [
+                'appointment_date' => 'required|date',
+                'appointment_time' => 'required|string',
+                'status' => 'required|in:pending,confirmed,cancelled',
+                'notes' => 'nullable|string',
+                'services' => 'required|array|min:1',
+                'services.*' => 'integer|exists:services,id',
+                'pets' => 'required|array|min:1|max:5',
+                'pets.*.id' => 'nullable|integer', // null for new pets, integer for existing
+                'pets.*.type' => 'required|in:dog,cat',
+                'pets.*.breed' => 'required|string|max:255',
+                'pets.*.name' => 'required|string|max:255',
+                'pets.*.groomingDetails' => 'nullable|array',
+                'pets.*.groomingDetails.*' => 'array',
+                'pets.*.groomingDetails.*.*.service' => 'required|string',
+                'pets.*.groomingDetails.*.*.size' => 'required|string',
+                'pets.*.groomingDetails.*.*.price' => 'required|numeric',
+                'pets.*.groomingDetails.*.*.package' => 'required|string',
+                'pets.*.dentalCareDetails' => 'nullable|array',
+                'pets.*.dentalCareDetails.procedure' => 'required_with:pets.*.dentalCareDetails|string',
+                'pets.*.dentalCareDetails.size' => 'required_with:pets.*.dentalCareDetails|string',
+                'pets.*.dentalCareDetails.procedurePrice' => 'required_with:pets.*.dentalCareDetails|numeric',
+                'pets.*.dentalCareDetails.anesthetic' => 'required_with:pets.*.dentalCareDetails|string',
+                'pets.*.dentalCareDetails.anestheticPrice' => 'required_with:pets.*.dentalCareDetails|numeric',
+                'pets.*.dentalCareDetails.totalPrice' => 'required_with:pets.*.dentalCareDetails|numeric',
+                'pets.*.vaccineDetails' => 'nullable|array',
+                'pets.*.vaccineDetails.*.id' => 'required|integer',
+                'pets.*.vaccineDetails.*.name' => 'required|string',
+                'pets.*.vaccineDetails.*.description' => 'nullable|string',
+                'pets.*.vaccineDetails.*.price' => 'required|numeric',
+                'pets.*.vaccineDetails.*.quantity' => 'required|integer',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+            }
+
+            // Check if the selected date is not Sunday (only if date is being changed)
+            $selectedDate = new \DateTime($request->appointment_date);
+            if ($selectedDate->format('w') == 0) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Appointments cannot be scheduled on Sundays'
+                ], 422)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+            }
+
+            // Check time slot availability (if date/time changed)
+            if ($request->appointment_date !== $appointment->appointment_date || 
+                $request->appointment_time !== $appointment->appointment_time) {
+                
+                $maxAppointmentsPerSlot = config('appointments.max_appointments_per_slot', 3);
+                $existingAppointments = Appointment::whereDate('appointment_date', $request->appointment_date)
+                    ->where('appointment_time', $request->appointment_time)
+                    ->where('id', '!=', $appointment->id)
+                    ->whereIn('status', ['pending', 'confirmed'])
+                    ->count();
+
+                if ($existingAppointments >= $maxAppointmentsPerSlot) {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'This time slot is fully booked. Please select a different time.',
+                        'error_type' => 'slot_full',
+                        'available_slots' => $existingAppointments,
+                        'max_slots' => $maxAppointmentsPerSlot
+                    ], 422)
+                        ->header('Access-Control-Allow-Origin', '*')
+                        ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                        ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+                }
+            }
+
+            DB::beginTransaction();
+
+            try {
+                // Update appointment basic details
+                $appointment->update([
+                    'appointment_date' => $request->appointment_date,
+                    'appointment_time' => $request->appointment_time,
+                    'status' => $request->status,
+                    'notes' => $request->notes,
+                ]);
+
+                // Update services
+                $appointment->services()->detach();
+                $appointment->services()->attach($request->services);
+
+                // Get existing pets for this appointment
+                $existingPets = $appointment->pets()->pluck('id')->toArray();
+                $updatedPetIds = [];
+
+                // Process pets
+                foreach ($request->pets as $petData) {
+                    $petAttributes = [
+                        'type' => $petData['type'],
+                        'breed' => $petData['breed'],
+                        'name' => $petData['name'],
+                        'grooming_details' => !empty($petData['groomingDetails']) ? json_encode($petData['groomingDetails']) : null,
+                        'dental_care_details' => !empty($petData['dentalCareDetails']) ? json_encode($petData['dentalCareDetails']) : null,
+                        'vaccine_details' => !empty($petData['vaccineDetails']) ? json_encode($petData['vaccineDetails']) : null,
+                    ];
+
+                    if (isset($petData['id']) && $petData['id']) {
+                        // Update existing pet
+                        $pet = $appointment->pets()->findOrFail($petData['id']);
+                        $pet->update($petAttributes);
+                        $updatedPetIds[] = $pet->id;
+                    } else {
+                        // Create new pet
+                        $newPet = $appointment->pets()->create($petAttributes);
+                        $updatedPetIds[] = $newPet->id;
+                    }
+                }
+
+                // Remove pets that are no longer in the request
+                $petsToRemove = array_diff($existingPets, $updatedPetIds);
+                if (!empty($petsToRemove)) {
+                    $appointment->pets()->whereIn('id', $petsToRemove)->delete();
+                }
+
+                DB::commit();
+
+                // Reload the appointment with updated relationships
+                $appointment->load(['pets', 'services', 'user']);
+
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Appointment updated successfully',
+                    'appointment' => $appointment
+                ], 200)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+
+            } catch (\Exception $e) {
+                DB::rollback();
+                throw $e;
+            }
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Appointment not found'
+            ], 404)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to update appointment',
+                'error' => $e->getMessage()
+            ], 500)
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        }
+    }
+
+    /**
      * Cancel user's own appointment (only pending appointments)
      */
     public function cancel(Request $request, $id)
@@ -528,6 +735,59 @@ class AppointmentController extends Controller
                 ->header('Access-Control-Allow-Origin', '*')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
                 ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        }
+    }
+
+    /**
+     * Get available vaccines from the Vaccines category for appointment booking.
+     */
+    public function getAvailableVaccines()
+    {
+        try {
+            // Find the Vaccines category
+            $vaccinesCategory = \App\Models\Category::where('name', 'Vaccines')->first();
+            
+            if (!$vaccinesCategory) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Vaccines category not found. Please contact the administrator.',
+                    'vaccines' => []
+                ], 404);
+            }
+
+            // Get all products from the Vaccines category that are in stock
+            $vaccines = \App\Models\Product::where('category_id', $vaccinesCategory->id)
+                ->where('quantity', '>', 0)
+                ->orderBy('name')
+                ->get(['id', 'name', 'description', 'price', 'quantity']);
+
+            if ($vaccines->isEmpty()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No vaccines are currently available in stock.',
+                    'vaccines' => []
+                ], 404);
+            }
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Vaccines retrieved successfully',
+                'vaccines' => $vaccines,
+                'category' => [
+                    'id' => $vaccinesCategory->id,
+                    'name' => $vaccinesCategory->name,
+                    'description' => $vaccinesCategory->description
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('Error fetching vaccines: ' . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to fetch available vaccines',
+                'error' => $e->getMessage(),
+                'vaccines' => []
+            ], 500);
         }
     }
 }
