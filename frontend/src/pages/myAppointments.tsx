@@ -191,7 +191,7 @@ export default function MyAppointments() {
         // Convert 24-hour format to 12-hour format
         const [hours, minutes] = timeString.split(':');
         const hour = parseInt(hours);
-        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const ampm = hour >= 12 ? 'PM' : '';
         const displayHour = hour % 12 || 12;
         return `${displayHour}:${minutes} ${ampm}`;
     };
