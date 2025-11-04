@@ -5,7 +5,8 @@ import { useNavigate } from 'react-router-dom';
 
 interface User {
     id: number;
-    name: string;
+    name?: string;        // Optional - some responses use 'name'
+    username?: string;    // Optional - localStorage uses 'username'
     email: string;
     email_verified_at: string | null;
     created_at: string;
@@ -23,7 +24,7 @@ export default function UserMenu({ user }: UserMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
-    // Close menu when clicking outside
+    // Close menu when clicking outside - must be before any early returns
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -34,6 +35,16 @@ export default function UserMenu({ user }: UserMenuProps) {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    // Safety check - if user data is missing or corrupted, force re-login
+    if (!user || (!user.name && !user.username)) {
+        console.error('UserMenu: User data is incomplete, forcing re-login', user);
+        // Clear corrupted data and redirect to login
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+        return null;
+    }
 
     const handleLogout = async () => {
         setLoading(true);
@@ -59,6 +70,10 @@ export default function UserMenu({ user }: UserMenuProps) {
         setIsOpen(false);
     };
 
+    // Get display name with fallback - prioritize username from localStorage
+    const displayName = user.username || user.name || user.email || 'User';
+    const userInitial = displayName.charAt(0).toUpperCase();
+
     return (
         <div className="relative" ref={menuRef}>
             {/* User button */}
@@ -67,7 +82,7 @@ export default function UserMenu({ user }: UserMenuProps) {
                 className="hidden md:flex items-center gap-2 text-white hover:text-gray-200 transition-colors"
             >
                 <FaUserAlt />
-                <span className="max-w-32 truncate">{user.email}</span>
+                <span className="max-w-32 truncate">{displayName}</span>
                 <svg 
                     className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
                     fill="currentColor" 
@@ -84,11 +99,11 @@ export default function UserMenu({ user }: UserMenuProps) {
                     <div className="px-4 py-3 border-b border-gray-200">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold">
-                                {user.name.charAt(0).toUpperCase()}
+                                {userInitial}
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-gray-900 truncate">
-                                    {user.name}
+                                    {displayName}
                                 </p>
                                 <p className="text-xs text-gray-500 truncate">
                                     {user.email}
