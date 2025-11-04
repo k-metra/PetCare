@@ -28,6 +28,7 @@ interface Pet {
     anestheticPrice: number;
     totalPrice: number;
   };
+  vaccineDetails?: Vaccine[];
 }
 
 interface AppointmentData {
@@ -45,6 +46,14 @@ interface TimeSlot {
   remaining_slots: number;
 }
 
+interface Vaccine {
+  id: number;
+  name: string;
+  description?: string;
+  price: number;
+  quantity: number;
+}
+
 const SetAppointment: React.FC = () => {
   const navigate = useNavigate();
   const { showNotification } = useNotification();
@@ -60,6 +69,11 @@ const SetAppointment: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([]);
   const [isLoadingTimeSlots, setIsLoadingTimeSlots] = useState<boolean>(false);
+  
+  // Vaccine selection state
+  const [availableVaccines, setAvailableVaccines] = useState<Vaccine[]>([]);
+  const [showVaccineModal, setShowVaccineModal] = useState<boolean>(false);
+  const [isLoadingVaccines, setIsLoadingVaccines] = useState<boolean>(false);
 
   // Available time slots from 8 AM to 3 PM
   const timeSlots = [
@@ -252,6 +266,8 @@ const SetAppointment: React.FC = () => {
   const [showDentalCareModal, setShowDentalCareModal] = useState(false);
   const [currentPetForDentalCare, setCurrentPetForDentalCare] = useState<number | null>(null);
   const [selectedDentalProcedure, setSelectedDentalProcedure] = useState<{procedure: string, size: string, price: number} | null>(null);
+  const [currentPetForVaccination, setCurrentPetForVaccination] = useState<number | null>(null);
+  const [tempSelectedVaccines, setTempSelectedVaccines] = useState<Vaccine[]>([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmModalData, setConfirmModalData] = useState<{
     message: string;
@@ -335,6 +351,49 @@ const SetAppointment: React.FC = () => {
       })));
     } finally {
       setIsLoadingTimeSlots(false);
+    }
+  };
+
+  // Function to fetch available vaccines from the Vaccines category
+  const fetchAvailableVaccines = async () => {
+    try {
+      setIsLoadingVaccines(true);
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        showNotification('Please login to view available vaccines.', 'error');
+        return;
+      }
+
+      const response = await fetch(apiUrl.availableVaccines(), {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      
+      if (data.status) {
+        // Ensure price is converted to number to prevent toFixed errors
+        const vaccinesWithNumericPrice = data.vaccines.map((vaccine: any) => ({
+          ...vaccine,
+          price: parseFloat(vaccine.price) || 0,
+          quantity: parseInt(vaccine.quantity) || 0
+        }));
+        setAvailableVaccines(vaccinesWithNumericPrice);
+      } else {
+        console.error('Failed to fetch available vaccines:', data.message);
+        showNotification(data.message || 'Failed to load available vaccines.', 'error');
+        setAvailableVaccines([]);
+      }
+    } catch (error) {
+      console.error('Error fetching available vaccines:', error);
+      showNotification('Error loading vaccines. Please try again.', 'error');
+      setAvailableVaccines([]);
+    } finally {
+      setIsLoadingVaccines(false);
     }
   };
 
@@ -461,6 +520,59 @@ const SetAppointment: React.FC = () => {
     setCurrentPetForDentalCare(null);
   };
 
+  // Vaccination modal handlers
+  const handleVaccinationModalOpen = (petIndex: number) => {
+    setCurrentPetForVaccination(petIndex);
+    
+    // Load current pet's vaccine details if any
+    const currentPet = appointmentData.pets[petIndex];
+    setTempSelectedVaccines(currentPet.vaccineDetails || []);
+    
+    // Fetch available vaccines and show modal
+    fetchAvailableVaccines();
+    setShowVaccineModal(true);
+  };
+
+  const handleVaccinationModalClose = () => {
+    setShowVaccineModal(false);
+    setTempSelectedVaccines([]);
+  };
+
+  const handleVaccinationSave = () => {
+    if (currentPetForVaccination !== null) {
+      const updatedPets = [...appointmentData.pets];
+      updatedPets[currentPetForVaccination] = {
+        ...updatedPets[currentPetForVaccination],
+        vaccineDetails: tempSelectedVaccines.length > 0 ? tempSelectedVaccines : undefined
+      };
+      
+      setAppointmentData(prev => ({ ...prev, pets: updatedPets }));
+      setShowVaccineModal(false);
+      setTempSelectedVaccines([]);
+      
+      // Check if there are more pets without vaccination details
+      const nextPetIndex = updatedPets.findIndex((pet, index) => 
+        index > currentPetForVaccination! && !pet.vaccineDetails && appointmentData.services.includes('Vaccination')
+      );
+      
+      if (nextPetIndex !== -1) {
+        const nextPetName = updatedPets[nextPetIndex].name || `Pet #${nextPetIndex + 1}`;
+        setTimeout(() => {
+          showCustomConfirm(
+            `Would you like to select vaccines for ${nextPetName}?`,
+            () => {
+              setCurrentPetForVaccination(nextPetIndex);
+              setTempSelectedVaccines([]);
+              setShowVaccineModal(true);
+            }
+          );
+        }, 100);
+      }
+    }
+    
+    setCurrentPetForVaccination(null);
+  };
+
   const handleServiceToggle = (service: string) => {
     const currentServices = appointmentData.services;
     
@@ -510,12 +622,46 @@ const SetAppointment: React.FC = () => {
           handleDentalCareModalOpen(0);
         }
       }
+    } else if (service === 'Vaccination') {
+      if (currentServices.includes(service)) {
+        // Remove vaccination service and clear all pet vaccine details
+        const updatedServices = currentServices.filter(s => s !== service);
+        const updatedPets = appointmentData.pets.map(pet => ({
+          ...pet,
+          vaccineDetails: undefined
+        }));
+        setAppointmentData(prev => ({ 
+          ...prev, 
+          services: updatedServices,
+          pets: updatedPets
+        }));
+      } else {
+        // Add vaccination service and show modal for first pet
+        const updatedServices = [...currentServices, service];
+        setAppointmentData(prev => ({ ...prev, services: updatedServices }));
+        
+        // Show modal for first pet
+        if (appointmentData.pets.length > 0) {
+          handleVaccinationModalOpen(0);
+        }
+      }
     } else {
       const updatedServices = currentServices.includes(service)
         ? currentServices.filter(s => s !== service)
         : [...currentServices, service];
       
       setAppointmentData(prev => ({ ...prev, services: updatedServices }));
+    }
+  };
+
+  // Vaccine selection handlers (updated for per-pet system)
+  const handleVaccineToggle = (vaccine: Vaccine) => {
+    const isSelected = tempSelectedVaccines.some(v => v.id === vaccine.id);
+    
+    if (isSelected) {
+      setTempSelectedVaccines(prev => prev.filter(v => v.id !== vaccine.id));
+    } else {
+      setTempSelectedVaccines(prev => [...prev, vaccine]);
     }
   };
 
@@ -599,7 +745,8 @@ const SetAppointment: React.FC = () => {
             breed: pet.breed === 'Other' && pet.customBreed ? pet.customBreed : pet.breed,
             name: pet.name,
             groomingDetails: formattedGroomingDetails,
-            dentalCareDetails: formattedDentalCareDetails
+            dentalCareDetails: formattedDentalCareDetails,
+            vaccineDetails: pet.vaccineDetails || null
           };
         }),
         services: appointmentData.services,
@@ -1106,6 +1253,62 @@ const SetAppointment: React.FC = () => {
                         )}
                       </div>
                     )}
+
+                    {/* Vaccination Management */}
+                    {appointmentData.services.includes('Vaccination') && (
+                      <div className="mt-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="text-sm font-semibold text-gray-700">
+                              Vaccination Details for {pet.name || `Pet #${index + 1}`}
+                            </h4>
+                            <p className="text-xs text-gray-500 mt-1">Optional - You can skip vaccination for individual pets</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleVaccinationModalOpen(index)}
+                            className="text-sm bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200 transition-colors"
+                          >
+                            {pet.vaccineDetails && pet.vaccineDetails.length > 0 ? 'Edit Vaccines' : 'Select Vaccines'}
+                          </button>
+                        </div>
+                        
+                        {pet.vaccineDetails && pet.vaccineDetails.length > 0 && (
+                          <div className="bg-green-50 p-3 rounded-lg mt-2">
+                            <div className="text-sm mb-2">
+                              <span className="font-medium text-green-600">Selected Vaccines:</span>
+                            </div>
+                            <div className="space-y-1">
+                              {pet.vaccineDetails.map((vaccine, vIndex) => (
+                                <div key={vIndex} className="flex justify-between items-center text-sm">
+                                  <span className="text-gray-700">{vaccine.name}</span>
+                                  <span className="text-green-600 font-medium">₱{vaccine.price.toFixed(2)}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="pt-2 border-t border-green-200 mt-2">
+                              <div className="flex justify-between items-center text-sm font-medium">
+                                <span className="text-gray-700">Total:</span>
+                                <span className="text-green-600">
+                                  ₱{pet.vaccineDetails.reduce((total, vaccine) => total + vaccine.price, 0).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updatedPets = [...appointmentData.pets];
+                                updatedPets[index].vaccineDetails = undefined;
+                                setAppointmentData(prev => ({ ...prev, pets: updatedPets }));
+                              }}
+                              className="mt-2 text-xs text-red-600 hover:text-red-800 transition-colors"
+                            >
+                              Remove Vaccines
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1128,6 +1331,11 @@ const SetAppointment: React.FC = () => {
                       className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded"
                     />
                     <span className="ml-3 text-gray-700 font-medium">{service}</span>
+                    {service === 'Vaccination' && appointmentData.services.includes(service) && appointmentData.pets.some(pet => pet.vaccineDetails && pet.vaccineDetails.length > 0) && (
+                      <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                        {appointmentData.pets.reduce((total, pet) => total + (pet.vaccineDetails?.length || 0), 0)} vaccine{appointmentData.pets.reduce((total, pet) => total + (pet.vaccineDetails?.length || 0), 0) !== 1 ? 's' : ''} selected
+                      </span>
+                    )}
                   </label>
                 ))}
               </div>
@@ -1210,6 +1418,53 @@ const SetAppointment: React.FC = () => {
                       }, 0)}
                     </span>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Requested Vaccines Summary */}
+            {appointmentData.services.includes('Vaccination') && appointmentData.pets.some(pet => pet.vaccineDetails && pet.vaccineDetails.length > 0) && (
+              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                <h3 className="font-semibold text-gray-800 mb-3">Requested Vaccines by Pet</h3>
+                <p className="text-sm text-green-700 mb-3">
+                  These vaccines are requested for your pets. Final selection and billing will be handled by the veterinarian.
+                </p>
+                {appointmentData.pets.map((pet, index) => {
+                  if (!pet.vaccineDetails || pet.vaccineDetails.length === 0) return null;
+                  
+                  return (
+                    <div key={index} className="mb-4 last:mb-0">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="font-medium text-gray-700">
+                          {pet.name || `Pet #${index + 1}`}
+                        </span>
+                        <span className="text-green-600 font-semibold">
+                          ₱{pet.vaccineDetails.reduce((total, vaccine) => total + vaccine.price, 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="ml-4 space-y-1">
+                        {pet.vaccineDetails.map((vaccine, vIndex) => (
+                          <div key={vIndex} className="flex justify-between items-center text-sm">
+                            <span className="text-gray-600">{vaccine.name}</span>
+                            <span className="text-green-600">₱{vaccine.price.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="pt-3 border-t border-green-300 mt-3">
+                  <div className="flex justify-between items-center font-semibold">
+                    <span className="text-gray-800">Total Estimated Vaccine Cost:</span>
+                    <span className="text-green-600">
+                      ₱{appointmentData.pets.reduce((total, pet) => 
+                        total + (pet.vaccineDetails?.reduce((petTotal, vaccine) => petTotal + vaccine.price, 0) || 0), 0
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    * This is an estimate. Actual cost may vary based on veterinarian's assessment.
+                  </p>
                 </div>
               </div>
             )}
@@ -1571,6 +1826,125 @@ const SetAppointment: React.FC = () => {
                   className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
                 >
                   Yes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Vaccine Selection Modal */}
+    {showVaccineModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+          <div className="p-6 border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Select Vaccines
+              </h3>
+              <button
+                onClick={handleVaccinationModalClose}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mt-2">
+              Select vaccines that you would like to request for your pet(s). These will be noted as requested vaccines for staff to review.
+            </p>
+          </div>
+          
+          <div className="p-6 overflow-y-auto flex-1 min-h-0">
+            {isLoadingVaccines ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto"></div>
+                <p className="text-gray-600 mt-2">Loading available vaccines...</p>
+              </div>
+            ) : availableVaccines.length === 0 ? (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <h4 className="text-lg font-medium text-gray-900 mb-2">No vaccines available</h4>
+                <p className="text-gray-600">
+                  There are currently no vaccines in stock or the Vaccines category doesn't exist.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {availableVaccines.map((vaccine) => {
+                  const isSelected = tempSelectedVaccines.some(v => v.id === vaccine.id);
+                  return (
+                    <div
+                      key={vaccine.id}
+                      className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                        isSelected 
+                          ? 'border-teal-500 bg-teal-50' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                      onClick={() => handleVaccineToggle(vaccine)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                              isSelected 
+                                ? 'border-teal-500 bg-teal-500' 
+                                : 'border-gray-300'
+                            }`}>
+                              {isSelected && (
+                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-gray-900">{vaccine.name}</h4>
+                              {vaccine.description && (
+                                <p className="text-sm text-gray-600 mt-1">{vaccine.description}</p>
+                              )}
+                              <div className="flex items-center gap-4 mt-2 text-sm">
+                                <span className="text-teal-600 font-medium">₱{vaccine.price.toFixed(2)}</span>
+                                <span className="text-gray-500">Stock: {vaccine.quantity}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          
+          <div className="p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                {tempSelectedVaccines.length} vaccine(s) selected
+                {tempSelectedVaccines.length > 0 && (
+                  <span className="ml-2 font-medium">
+                    (Total: ₱{tempSelectedVaccines.reduce((sum, v) => sum + v.price, 0).toFixed(2)})
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleVaccinationModalClose}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleVaccinationSave}
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                >
+                  Confirm Selection
                 </button>
               </div>
             </div>
