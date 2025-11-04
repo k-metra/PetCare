@@ -17,6 +17,7 @@ import {
   FaBan,
   FaExclamationTriangle,
   FaEye,
+  FaEdit,
   FaTimes,
   FaTrash
 } from 'react-icons/fa';
@@ -55,6 +56,13 @@ interface Pet {
     anestheticPrice: number;
     totalPrice: number;
   };
+  vaccine_details?: Array<{
+    id: number;
+    name: string;
+    description?: string;
+    price: number;
+    quantity: number;
+  }>;
 }
 
 interface Service {
@@ -200,6 +208,13 @@ const AdminDashboard: React.FC = () => {
   const [appointmentToComplete, setAppointmentToComplete] = useState<Appointment | null>(null);
   const [medicalExam, setMedicalExam] = useState<MedicalExamination | null>(null);
 
+  // Edit appointment state
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState<any>({});
+  const [availableServices, setAvailableServices] = useState<any[]>([]);
+  const [availableVaccines, setAvailableVaccines] = useState<any[]>([]);
+
   // Helper function to check if user is admin
   const isAdmin = () => {
     return user?.role === 'admin';
@@ -240,7 +255,7 @@ const AdminDashboard: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
   const [inventorySubTab, setInventorySubTab] = useState<'products' | 'categories'>('products');
-  const [analyticsSubTab, setAnalyticsSubTab] = useState<'appointments' | 'income'>('appointments');
+  const [analyticsSubTab, setAnalyticsSubTab] = useState<'appointments' | 'income' | 'pets'>('appointments');
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [showProductModal, setShowProductModal] = useState(false);
@@ -1043,6 +1058,79 @@ const AdminDashboard: React.FC = () => {
     
     setSelectedAppointment(appointmentWithMedical);
     setShowDetailsModal(true);
+  };
+
+  // Handle editing appointment
+  const handleEditAppointment = async (appointment: Appointment) => {
+    // Only allow editing of pending and confirmed appointments
+    if (appointment.status === 'completed') {
+      alert('Completed appointments cannot be edited');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+
+      // Load services and vaccines if not already loaded
+      if (availableServices.length === 0) {
+        const servicesResponse = await fetch(apiUrl.services(), {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
+        const servicesData = await servicesResponse.json();
+        if (servicesData.status) {
+          setAvailableServices(servicesData.services);
+        }
+      }
+
+      if (availableVaccines.length === 0) {
+        const vaccinesResponse = await fetch(apiUrl.availableVaccines(), {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
+        const vaccinesData = await vaccinesResponse.json();
+        if (vaccinesData.status) {
+          setAvailableVaccines(vaccinesData.vaccines);
+        }
+      }
+
+      // Use the existing appointment data instead of fetching
+      // Prepare form data from existing appointment
+      const formData = {
+        appointment_date: appointment.appointment_date,
+        appointment_time: appointment.appointment_time,
+        status: appointment.status,
+        notes: appointment.notes || '',
+        services: appointment.services.map((s: any) => s.id),
+        pets: appointment.pets.map((pet: any) => ({
+          id: pet.id,
+          type: pet.type,
+          breed: pet.breed,
+          name: pet.name,
+          groomingDetails: pet.grooming_details ? 
+            (typeof pet.grooming_details === 'string' ? 
+              JSON.parse(pet.grooming_details) : pet.grooming_details) : null,
+          dentalCareDetails: pet.dental_care_details ? 
+            (typeof pet.dental_care_details === 'string' ? 
+              JSON.parse(pet.dental_care_details) : pet.dental_care_details) : null,
+          vaccineDetails: pet.vaccine_details ? 
+            (typeof pet.vaccine_details === 'string' ? 
+              JSON.parse(pet.vaccine_details) : pet.vaccine_details) : []
+        }))
+      };
+
+      setEditingAppointment(appointment);
+      setEditFormData(formData);
+      setShowEditModal(true);
+
+    } catch (error: any) {
+      console.error('Error loading appointment for editing:', error);
+      alert('Failed to load appointment for editing: ' + error.message);
+    }
   };
 
   // Handle customer appointment details (from customer tab)
@@ -2184,6 +2272,62 @@ const AdminDashboard: React.FC = () => {
       });
     }
 
+    // Vaccination Services Detail
+    const vaccinePets = appointment.pets.filter((pet: any) => Array.isArray(pet.vaccine_details) && pet.vaccine_details.length > 0);
+    if (vaccinePets.length > 0) {
+      if (yPosition > 220) {
+        doc.addPage();
+        yPosition = 20;
+      }
+
+      doc.setFillColor(240, 253, 250);
+      doc.rect(15, yPosition - 5, 180, 20, 'F');
+      
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(20, 184, 166);
+      doc.text('VACCINE REQUESTS DETAIL', 20, yPosition);
+      doc.setTextColor(0, 0, 0);
+      yPosition += 8;
+
+      vaccinePets.forEach((pet: any) => {
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${pet.name} (${pet.type})`, 20, yPosition);
+        yPosition += 6;
+
+        let totalVaccinePrice = 0;
+        (Array.isArray(pet.vaccine_details) ? pet.vaccine_details : []).forEach((vaccine: any) => {
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.text(`• ${vaccine.name}`, 25, yPosition);
+          yPosition += 4;
+          if (vaccine.description) {
+            doc.setFontSize(9);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`  ${vaccine.description}`, 25, yPosition);
+            yPosition += 4;
+            doc.setTextColor(0, 0, 0);
+          }
+          doc.setFontSize(10);
+          doc.setTextColor(20, 184, 166);
+          const price = typeof vaccine.price === 'number' ? vaccine.price : parseFloat(vaccine.price) || 0;
+          doc.text(`  Price: ₱${price.toFixed(2)}`, 25, yPosition);
+          totalVaccinePrice += price;
+          yPosition += 5;
+          doc.setTextColor(0, 0, 0);
+        });
+
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(20, 184, 166);
+        doc.text(`Pet Vaccines Total: ₱${totalVaccinePrice.toFixed(2)}`, 25, yPosition);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+        yPosition += 8;
+      });
+    }
+
     // Products Used (if any)
     if (appointment.status === 'completed' && (appointment as any).inventory_usage && (appointment as any).inventory_usage.length > 0) {
       if (yPosition > 220) {
@@ -2280,6 +2424,25 @@ const AdminDashboard: React.FC = () => {
       yPosition += 6;
     }
 
+    // Vaccine requests total
+    const vaccineTotal = appointment.pets.reduce((total: number, pet: any) => {
+      if (Array.isArray(pet.vaccine_details) && pet.vaccine_details.length > 0) {
+        return total + pet.vaccine_details.reduce((petTotal: number, vaccine: any) => {
+          const price = typeof vaccine.price === 'number' ? vaccine.price : parseFloat(vaccine.price) || 0;
+          return petTotal + price;
+        }, 0);
+      }
+      return total;
+    }, 0);
+    
+    if (vaccineTotal > 0) {
+      doc.text(`Vaccine Requests:`, 20, yPosition);
+      doc.setTextColor(20, 184, 166);
+      doc.text(formatPeso(vaccineTotal), 160, yPosition);
+      doc.setTextColor(0, 0, 0);
+      yPosition += 6;
+    }
+
     // Medical tests total
     let medicalTestsTotal = 0;
     if (appointment.status === 'completed' && medicalRecords && medicalRecords.length > 0) {
@@ -2313,7 +2476,7 @@ const AdminDashboard: React.FC = () => {
     }
 
     // Grand total with teal highlight
-    const grandTotal = baseServicesTotal + groomingTotal + dentalTotal + medicalTestsTotal + productsTotal;
+    const grandTotal = baseServicesTotal + groomingTotal + dentalTotal + vaccineTotal + medicalTestsTotal + productsTotal;
     
     yPosition += 5;
     doc.setFillColor(20, 184, 166);
@@ -2815,6 +2978,11 @@ const AdminDashboard: React.FC = () => {
                               <strong>Dental Care:</strong> {appointment.pets.filter(pet => pet.dental_care_details).length} pet(s) with dental services
                             </div>
                           )}
+                          {appointment.pets.some(pet => Array.isArray(pet.vaccine_details) && pet.vaccine_details.length > 0) && (
+                            <div className="text-xs text-purple-600">
+                              <strong>Vaccines:</strong> {appointment.pets.filter(pet => Array.isArray(pet.vaccine_details) && pet.vaccine_details.length > 0).length} pet(s) with vaccine requests
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -2832,6 +3000,16 @@ const AdminDashboard: React.FC = () => {
                             <FaEye className="mr-1" />
                             Details
                           </button>
+                          {appointment.status !== 'completed' && (
+                            <button
+                              onClick={() => handleEditAppointment(appointment)}
+                              className="text-blue-600 hover:text-blue-900 flex items-center"
+                              title="Edit appointment"
+                            >
+                              <FaEdit className="mr-1" />
+                              Edit
+                            </button>
+                          )}
                           {appointment.status === 'completed' && (
                             <button
                               onClick={() => generateAppointmentPDF(appointment)}
@@ -3896,6 +4074,16 @@ const AdminDashboard: React.FC = () => {
                       >
                         Monthly Income
                       </button>
+                      <button
+                        onClick={() => setAnalyticsSubTab('pets')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                          analyticsSubTab === 'pets'
+                            ? 'bg-white text-teal-700 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        Pet Analytics
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -4001,6 +4189,185 @@ const AdminDashboard: React.FC = () => {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                             </svg>
                             <p className="text-gray-500">No income data available.</p>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Pet Analytics Report */}
+                {analyticsSubTab === 'pets' && (
+                  <div className="p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-6">Pet Analytics</h4>
+                    {analyticsData && (analyticsData.petTypes || analyticsData.petBreeds) ? (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        
+                        {/* Pet Types Pie Chart */}
+                        {analyticsData.petTypes && Object.keys(analyticsData.petTypes).length > 0 && (
+                          <div className="bg-gray-50 rounded-lg p-6">
+                            <h5 className="text-md font-semibold text-gray-800 mb-4 text-center">Pet Types Distribution</h5>
+                            <div className="relative">
+                              {(() => {
+                                const petTypeEntries = Object.entries(analyticsData.petTypes);
+                                const total = petTypeEntries.reduce((sum, [, count]) => sum + Number(count), 0);
+                                
+                                if (total === 0) {
+                                  return <p className="text-center text-gray-500">No pet data available</p>;
+                                }
+                                
+                                const colors = ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B']; // Green, Blue, Purple, Orange
+                                let cumulativePercentage = 0;
+                                
+                                return (
+                                  <div className="flex flex-col items-center">
+                                    <div className="relative w-48 h-48 mb-4">
+                                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                                        <circle cx="50" cy="50" r="40" fill="none" stroke="#e5e7eb" strokeWidth="8" />
+                                        {petTypeEntries.map(([type, count], index) => {
+                                          const percentage = (Number(count) / total) * 100;
+                                          const strokeDasharray = `${percentage * 2.51} ${251.2 - percentage * 2.51}`;
+                                          const strokeDashoffset = -cumulativePercentage * 2.51;
+                                          cumulativePercentage += percentage;
+                                          
+                                          return (
+                                            <circle
+                                              key={type}
+                                              cx="50"
+                                              cy="50"
+                                              r="40"
+                                              fill="none"
+                                              stroke={colors[index % colors.length]}
+                                              strokeWidth="8"
+                                              strokeDasharray={strokeDasharray}
+                                              strokeDashoffset={strokeDashoffset}
+                                              className="transition-all duration-300"
+                                            />
+                                          );
+                                        })}
+                                      </svg>
+                                      <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="text-center">
+                                          <div className="text-2xl font-bold text-gray-800">{total}</div>
+                                          <div className="text-sm text-gray-500">Total Pets</div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                      {petTypeEntries.map(([type, count], index) => {
+                                        const percentage = ((Number(count) / total) * 100).toFixed(1);
+                                        return (
+                                          <div key={type} className="flex items-center space-x-3">
+                                            <div 
+                                              className="w-4 h-4 rounded-full"
+                                              style={{ backgroundColor: colors[index % colors.length] }}
+                                            />
+                                            <span className="text-sm font-medium text-gray-700 capitalize">
+                                              {`${type}s`}
+                                            </span>
+                                            <span className="text-sm text-gray-500">
+                                              {`${count} (${percentage}%)`}
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Pet Breeds Pie Chart */}
+                        {analyticsData.petBreeds && Object.keys(analyticsData.petBreeds).length > 0 && (
+                          <div className="bg-gray-50 rounded-lg p-6">
+                            <h5 className="text-md font-semibold text-gray-800 mb-4 text-center">Top Pet Breeds</h5>
+                            <div className="relative">
+                              {(() => {
+                                const breedEntries = Object.entries(analyticsData.petBreeds);
+                                const total = breedEntries.reduce((sum, [, count]) => sum + Number(count), 0);
+                                
+                                if (total === 0) {
+                                  return <p className="text-center text-gray-500">No breed data available</p>;
+                                }
+                                
+                                const colors = ['#EF4444', '#F97316', '#EAB308', '#22C55E', '#6366F1']; // Red, Orange, Yellow, Green, Indigo
+                                let cumulativePercentage = 0;
+                                
+                                return (
+                                  <div className="flex flex-col items-center">
+                                    <div className="relative w-48 h-48 mb-4">
+                                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                                        <circle cx="50" cy="50" r="40" fill="none" stroke="#e5e7eb" strokeWidth="8" />
+                                        {breedEntries.map(([breed, count], index) => {
+                                          const percentage = (Number(count) / total) * 100;
+                                          const strokeDasharray = `${percentage * 2.51} ${251.2 - percentage * 2.51}`;
+                                          const strokeDashoffset = -cumulativePercentage * 2.51;
+                                          cumulativePercentage += percentage;
+                                          
+                                          return (
+                                            <circle
+                                              key={breed}
+                                              cx="50"
+                                              cy="50"
+                                              r="40"
+                                              fill="none"
+                                              stroke={colors[index % colors.length]}
+                                              strokeWidth="8"
+                                              strokeDasharray={strokeDasharray}
+                                              strokeDashoffset={strokeDashoffset}
+                                              className="transition-all duration-300"
+                                            />
+                                          );
+                                        })}
+                                      </svg>
+                                      <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="text-center">
+                                          <div className="text-2xl font-bold text-gray-800">{total}</div>
+                                          <div className="text-sm text-gray-500">Total Pets</div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                                      {breedEntries.map(([breed, count], index) => {
+                                        const percentage = ((Number(count) / total) * 100).toFixed(1);
+                                        return (
+                                          <div key={breed} className="flex items-center space-x-3">
+                                            <div 
+                                              className="w-4 h-4 rounded-full flex-shrink-0"
+                                              style={{ backgroundColor: colors[index % colors.length] }}
+                                            />
+                                            <span className="text-sm font-medium text-gray-700 truncate" title={breed}>
+                                              {breed}
+                                            </span>
+                                            <span className="text-sm text-gray-500 flex-shrink-0">
+                                              {`${count} (${percentage}%)`}
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        {analyticsData === null ? (
+                          <>
+                            <FaSpinner className="animate-spin text-4xl text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-500">Loading pet analytics...</p>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                            <p className="text-gray-500">No pet analytics data available.</p>
                           </>
                         )}
                       </div>
@@ -5101,6 +5468,49 @@ const AdminDashboard: React.FC = () => {
                           })()}
                         </div>
                       )}
+
+                      {/* Vaccine Details */}
+                      {(() => {
+                        console.log('Pet vaccine_details:', pet.vaccine_details, 'Type:', typeof pet.vaccine_details, 'Is Array:', Array.isArray(pet.vaccine_details));
+                        return null;
+                      })()}
+                      {(() => {
+                        const vaccineDetails = pet.vaccine_details ? 
+                          (typeof pet.vaccine_details === 'string' ? 
+                            JSON.parse(pet.vaccine_details) : pet.vaccine_details) : [];
+                        
+                        return vaccineDetails && Array.isArray(vaccineDetails) && vaccineDetails.length > 0 && (
+                          <div className="mt-4">
+                            <h6 className="font-medium text-gray-900 mb-2">Requested Vaccines</h6>
+                            <div className="bg-purple-50 rounded p-3">
+                              <div className="space-y-2">
+                                {vaccineDetails.map((vaccine: any, vaccineIndex: number) => (
+                                  <div key={vaccineIndex} className="flex justify-between items-center text-sm">
+                                    <div>
+                                      <span className="text-gray-700">{vaccine.name}</span>
+                                      {vaccine.description && (
+                                        <p className="text-xs text-gray-500 mt-1">{vaccine.description}</p>
+                                      )}
+                                    </div>
+                                    <span className="text-purple-600 font-medium">
+                                      ₱{typeof vaccine.price === 'number' ? vaccine.price.toFixed(2) : parseFloat(vaccine.price).toFixed(2)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="mt-3 pt-3 border-t border-purple-200">
+                                <div className="flex justify-between items-center font-semibold">
+                                  <span className="text-gray-800">Pet Vaccines Total:</span>
+                                  <span className="text-purple-600">
+                                    ₱{vaccineDetails.reduce((total: number, vaccine: any) => 
+                                      total + (typeof vaccine.price === 'number' ? vaccine.price : parseFloat(vaccine.price)), 0).toFixed(2)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -6344,6 +6754,545 @@ const AdminDashboard: React.FC = () => {
                   ) : (
                     'Reschedule Appointment'
                   )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Appointment Modal */}
+      {showEditModal && editingAppointment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+              <h3 className="text-xl font-semibold text-gray-900">
+                Edit Appointment #{editingAppointment.id}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingAppointment(null);
+                  setEditFormData({});
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <FaTimes className="text-xl" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="px-6 py-4 space-y-6">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="flex items-center">
+                  <FaExclamationTriangle className="text-yellow-600 mr-2" />
+                  <p className="text-yellow-800 text-sm">
+                    <strong>Note:</strong> This is a comprehensive appointment editing feature. 
+                    Changes will be saved when you click "Save Changes" at the bottom.
+                  </p>
+                </div>
+              </div>
+
+              {/* Basic Appointment Details */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="text-lg font-semibold text-gray-900 mb-3">Basic Details</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Appointment Date
+                    </label>
+                    <input
+                      type="date"
+                      value={editFormData.appointment_date || ''}
+                      onChange={(e) => setEditFormData({...editFormData, appointment_date: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Appointment Time
+                    </label>
+                    <select
+                      value={editFormData.appointment_time || ''}
+                      onChange={(e) => setEditFormData({...editFormData, appointment_time: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    >
+                      <option value="">Select Time</option>
+                      <option value="9:00 AM">9:00 AM</option>
+                      <option value="10:00 AM">10:00 AM</option>
+                      <option value="11:00 AM">11:00 AM</option>
+                      <option value="1:00 PM">1:00 PM</option>
+                      <option value="2:00 PM">2:00 PM</option>
+                      <option value="3:00 PM">3:00 PM</option>
+                      <option value="4:00 PM">4:00 PM</option>
+                      <option value="5:00 PM">5:00 PM</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Status
+                    </label>
+                    <select
+                      value={editFormData.status || ''}
+                      onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Notes
+                  </label>
+                  <textarea
+                    value={editFormData.notes || ''}
+                    onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    placeholder="Add any additional notes..."
+                  />
+                </div>
+              </div>
+
+              {/* Services Selection */}
+              <div className="bg-blue-50 rounded-lg p-4">
+                <h4 className="text-lg font-semibold text-gray-900 mb-3">Services</h4>
+                <div className="space-y-2">
+                  {availableServices.map((service: any) => (
+                    <label key={service.id} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={editFormData.services?.includes(service.id) || false}
+                        onChange={(e) => {
+                          const currentServices = editFormData.services || [];
+                          if (e.target.checked) {
+                            setEditFormData({
+                              ...editFormData,
+                              services: [...currentServices, service.id]
+                            });
+                          } else {
+                            setEditFormData({
+                              ...editFormData,
+                              services: currentServices.filter((id: number) => id !== service.id)
+                            });
+                          }
+                        }}
+                        className="h-4 w-4 text-teal-600 focus:ring-teal-500 border-gray-300 rounded mr-3"
+                      />
+                      <div>
+                        <span className="font-medium text-gray-900">{service.name}</span>
+                        {service.description && (
+                          <p className="text-sm text-gray-600">{service.description}</p>
+                        )}
+                        <p className="text-sm text-teal-600 font-medium">₱{service.price}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pet Information */}
+              <div className="bg-green-50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-lg font-semibold text-gray-900">Pet Information</h4>
+                  <button
+                    onClick={() => {
+                      const newPet = {
+                        id: null,
+                        type: 'dog',
+                        breed: '',
+                        name: '',
+                        groomingDetails: null,
+                        dentalCareDetails: null,
+                        vaccineDetails: []
+                      };
+                      setEditFormData({
+                        ...editFormData,
+                        pets: [...(editFormData.pets || []), newPet]
+                      });
+                    }}
+                    className="px-3 py-1 bg-teal-600 text-white rounded text-sm hover:bg-teal-700"
+                  >
+                    Add Pet
+                  </button>
+                </div>
+                
+                <div className="space-y-4">
+                  {(editFormData.pets || []).map((pet: any, index: number) => (
+                    <div key={index} className="bg-white rounded-lg p-4 border border-green-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <h5 className="font-medium text-gray-900">Pet #{index + 1}</h5>
+                        {(editFormData.pets || []).length > 1 && (
+                          <button
+                            onClick={() => {
+                              const updatedPets = editFormData.pets.filter((_: any, i: number) => i !== index);
+                              setEditFormData({...editFormData, pets: updatedPets});
+                            }}
+                            className="text-red-600 hover:text-red-800 text-sm"
+                          >
+                            <FaTrash className="inline mr-1" />
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                          <input
+                            type="text"
+                            value={pet.name || ''}
+                            onChange={(e) => {
+                              const updatedPets = [...editFormData.pets];
+                              updatedPets[index] = {...pet, name: e.target.value};
+                              setEditFormData({...editFormData, pets: updatedPets});
+                            }}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                            placeholder="Pet name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                          <select
+                            value={pet.type || 'dog'}
+                            onChange={(e) => {
+                              const updatedPets = [...editFormData.pets];
+                              updatedPets[index] = {...pet, type: e.target.value};
+                              setEditFormData({...editFormData, pets: updatedPets});
+                            }}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                          >
+                            <option value="dog">Dog</option>
+                            <option value="cat">Cat</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Breed</label>
+                          <input
+                            type="text"
+                            value={pet.breed || ''}
+                            onChange={(e) => {
+                              const updatedPets = [...editFormData.pets];
+                              updatedPets[index] = {...pet, breed: e.target.value};
+                              setEditFormData({...editFormData, pets: updatedPets});
+                            }}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                            placeholder="Pet breed"
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Detailed Service Configuration */}
+                      <div className="mt-4 space-y-4">
+                        
+                        {/* Grooming Services */}
+                        {editFormData.services?.includes(1) && ( // Pet Grooming service ID
+                          <div className="border border-teal-200 rounded-lg p-3 bg-teal-50">
+                            <h6 className="font-medium text-gray-900 mb-2 text-sm">Grooming Services</h6>
+                            <div className="space-y-2">
+                              {Object.entries(groomingPackages).map(([packageName, sizes]) => (
+                                <div key={packageName} className="space-y-1">
+                                  <p className="text-xs font-medium text-gray-700">{packageName}</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {Object.entries(sizes as any).map(([size, price]) => {
+                                      const isSelected = pet.groomingDetails?.[packageName]?.some((item: any) => item.size === size);
+                                      return (
+                                        <button
+                                          key={size}
+                                          type="button"
+                                          onClick={() => {
+                                            const updatedPets = [...editFormData.pets];
+                                            const currentGrooming = updatedPets[index].groomingDetails || {};
+                                            
+                                            if (isSelected) {
+                                              // Remove this service
+                                              if (currentGrooming[packageName]) {
+                                                currentGrooming[packageName] = currentGrooming[packageName].filter((item: any) => item.size !== size);
+                                                if (currentGrooming[packageName].length === 0) {
+                                                  delete currentGrooming[packageName];
+                                                }
+                                              }
+                                            } else {
+                                              // Add this service
+                                              if (!currentGrooming[packageName]) {
+                                                currentGrooming[packageName] = [];
+                                              }
+                                              currentGrooming[packageName].push({
+                                                service: packageName,
+                                                size: size,
+                                                price: Number(price),
+                                                package: packageName
+                                              });
+                                            }
+                                            
+                                            updatedPets[index] = {
+                                              ...updatedPets[index],
+                                              groomingDetails: Object.keys(currentGrooming).length > 0 ? currentGrooming : null
+                                            };
+                                            setEditFormData({...editFormData, pets: updatedPets});
+                                          }}
+                                          className={`px-2 py-1 text-xs rounded transition-colors ${
+                                            isSelected
+                                              ? 'bg-teal-600 text-white'
+                                              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                                          }`}
+                                        >
+                                          <>
+                                            {size} (₱{String(price)})
+                                          </>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Dental Care Services */}
+                        {editFormData.services?.includes(4) && ( // Dental Care service ID
+                          <div className="border border-blue-200 rounded-lg p-3 bg-blue-50">
+                            <h6 className="font-medium text-gray-900 mb-2 text-sm">Dental Care Services</h6>
+                            <div className="grid grid-cols-1 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Procedure</label>
+                                <select
+                                  value={pet.dentalCareDetails?.procedure || ''}
+                                  onChange={(e) => {
+                                    const updatedPets = [...editFormData.pets];
+                                    const selectedProcedure = e.target.value;
+                                    const currentDental = updatedPets[index].dentalCareDetails || {};
+                                    
+                                    if (selectedProcedure) {
+                                      updatedPets[index] = {
+                                        ...updatedPets[index],
+                                        dentalCareDetails: {
+                                          ...currentDental,
+                                          procedure: selectedProcedure,
+                                          size: currentDental.size || '',
+                                          procedurePrice: 0,
+                                          anesthetic: currentDental.anesthetic || '',
+                                          anestheticPrice: 0,
+                                          totalPrice: 0
+                                        }
+                                      };
+                                    } else {
+                                      updatedPets[index] = {
+                                        ...updatedPets[index],
+                                        dentalCareDetails: null
+                                      };
+                                    }
+                                    setEditFormData({...editFormData, pets: updatedPets});
+                                  }}
+                                  className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                                >
+                                  <option value="">Select Procedure</option>
+                                  {Object.keys(dentalCareProcedures).map(procedure => (
+                                    <option key={procedure} value={procedure}>{procedure}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              
+                              {pet.dentalCareDetails?.procedure && (
+                                <>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">Pet Size</label>
+                                    <select
+                                      value={pet.dentalCareDetails?.size || ''}
+                                      onChange={(e) => {
+                                        const updatedPets = [...editFormData.pets];
+                                        const selectedSize = e.target.value;
+                                        const procedure = pet.dentalCareDetails?.procedure;
+                                        const anesthetic = pet.dentalCareDetails?.anesthetic;
+                                        const procedurePrice = procedure && selectedSize ? (dentalCareProcedures as any)[procedure][selectedSize] : 0;
+                                        const anestheticPrice = anesthetic && selectedSize ? (dentalCareAnesthetics as any)[anesthetic][selectedSize] || 0 : 0;
+                                        
+                                        updatedPets[index] = {
+                                          ...updatedPets[index],
+                                          dentalCareDetails: {
+                                            ...updatedPets[index].dentalCareDetails,
+                                            size: selectedSize,
+                                            procedurePrice: procedurePrice,
+                                            anestheticPrice: anestheticPrice,
+                                            totalPrice: procedurePrice + anestheticPrice
+                                          }
+                                        };
+                                        setEditFormData({...editFormData, pets: updatedPets});
+                                      }}
+                                      className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                                    >
+                                      <option value="">Select Size</option>
+                                      {pet.dentalCareDetails?.procedure && Object.keys((dentalCareProcedures as any)[pet.dentalCareDetails.procedure] || {}).map(size => (
+                                        <option key={size} value={size}>{size}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">Anesthetic</label>
+                                    <select
+                                      value={pet.dentalCareDetails?.anesthetic || ''}
+                                      onChange={(e) => {
+                                        const updatedPets = [...editFormData.pets];
+                                        const selectedAnesthetic = e.target.value;
+                                        const petSize = pet.dentalCareDetails?.size || '';
+                                        const anestheticPrice = selectedAnesthetic && petSize ? 
+                                          (dentalCareAnesthetics as any)[selectedAnesthetic][petSize] || 0 : 0;
+                                        
+                                        updatedPets[index] = {
+                                          ...updatedPets[index],
+                                          dentalCareDetails: {
+                                            ...updatedPets[index].dentalCareDetails,
+                                            anesthetic: selectedAnesthetic,
+                                            anestheticPrice: anestheticPrice,
+                                            totalPrice: (updatedPets[index].dentalCareDetails?.procedurePrice || 0) + anestheticPrice
+                                          }
+                                        };
+                                        setEditFormData({...editFormData, pets: updatedPets});
+                                      }}
+                                      className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                                    >
+                                      <option value="">Select Anesthetic</option>
+                                      {Object.keys(dentalCareAnesthetics).map((anestheticType) => (
+                                        <option key={anestheticType} value={anestheticType}>
+                                          {anestheticType}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {pet.dentalCareDetails?.anesthetic && pet.dentalCareDetails?.size && (
+                                      <div className="text-xs text-gray-600 mt-1">
+                                        {pet.dentalCareDetails.anesthetic} ({pet.dentalCareDetails.size}): ₱{pet.dentalCareDetails.anestheticPrice || 0}
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  {pet.dentalCareDetails?.totalPrice > 0 && (
+                                    <div className="text-xs text-blue-600 font-medium">
+                                      Total: ₱{pet.dentalCareDetails.totalPrice}
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Vaccination Services */}
+                        {editFormData.services?.includes(3) && ( // Vaccination service ID
+                          <div className="border border-purple-200 rounded-lg p-3 bg-purple-50">
+                            <h6 className="font-medium text-gray-900 mb-2 text-sm">Vaccination Services</h6>
+                            <div className="max-h-48 overflow-y-auto space-y-2 pr-2"
+                                 style={{ scrollbarWidth: 'thin', scrollbarColor: '#9333ea #f3f4f6' }}>
+                              {availableVaccines.map((vaccine: any) => {
+                                const isSelected = pet.vaccineDetails?.some((v: any) => v.id === vaccine.id);
+                                return (
+                                  <label key={vaccine.id} className="flex items-center space-x-2 text-xs">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={(e) => {
+                                        const updatedPets = [...editFormData.pets];
+                                        let currentVaccines = updatedPets[index].vaccineDetails || [];
+                                        
+                                        if (e.target.checked) {
+                                          // Add vaccine
+                                          currentVaccines = [...currentVaccines, {
+                                            id: vaccine.id,
+                                            name: vaccine.name,
+                                            description: vaccine.description,
+                                            price: vaccine.price,
+                                            quantity: vaccine.quantity
+                                          }];
+                                        } else {
+                                          // Remove vaccine
+                                          currentVaccines = currentVaccines.filter((v: any) => v.id !== vaccine.id);
+                                        }
+                                        
+                                        updatedPets[index] = {
+                                          ...updatedPets[index],
+                                          vaccineDetails: currentVaccines
+                                        };
+                                        setEditFormData({...editFormData, pets: updatedPets});
+                                      }}
+                                      className="h-3 w-3 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                                    />
+                                    <div className="flex-1">
+                                      <span className="font-medium text-gray-900">{vaccine.name}</span>
+                                      {vaccine.description && (
+                                        <p className="text-gray-600 text-xs">{vaccine.description}</p>
+                                      )}
+                                      <p className="text-purple-600 font-medium text-xs">₱{vaccine.price}</p>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            
+                            {pet.vaccineDetails && pet.vaccineDetails.length > 0 && (
+                              <div className="text-xs text-purple-600 font-medium pt-2 border-t border-purple-200 mt-2">
+                                Total: ₱{pet.vaccineDetails.reduce((sum: number, v: any) => sum + parseFloat(v.price), 0).toFixed(2)}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingAppointment(null);
+                    setEditFormData({});
+                  }}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const token = localStorage.getItem('token');
+                      const response = await fetch(apiUrl.editAppointment(editingAppointment.id), {
+                        method: 'PUT',
+                        headers: {
+                          'Authorization': `Bearer ${token}`,
+                          'Content-Type': 'application/json',
+                          'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(editFormData)
+                      });
+
+                      const data = await response.json();
+                      if (data.status) {
+                        alert('Appointment updated successfully!');
+                        setShowEditModal(false);
+                        setEditingAppointment(null);
+                        setEditFormData({});
+                        // Refresh appointments
+                        fetchAppointments();
+                      } else {
+                        alert('Failed to update appointment: ' + data.message);
+                      }
+                    } catch (error: any) {
+                      console.error('Error updating appointment:', error);
+                      alert('Failed to update appointment: ' + error.message);
+                    }
+                  }}
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                >
+                  Save Changes
                 </button>
               </div>
             </div>
