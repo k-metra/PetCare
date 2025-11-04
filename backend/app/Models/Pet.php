@@ -13,12 +13,14 @@ class Pet extends Model
         'breed',
         'name',
         'grooming_details',
-        'dental_care_details'
+        'dental_care_details',
+        'vaccine_details'
     ];
 
     protected $casts = [
         'grooming_details' => 'array',
-        'dental_care_details' => 'array'
+        'dental_care_details' => 'array',
+        'vaccine_details' => 'array'
     ];
 
     /**
