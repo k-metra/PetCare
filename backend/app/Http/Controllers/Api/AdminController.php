@@ -25,6 +25,16 @@ class AdminController extends Controller
                 ->orderBy('appointment_time', 'desc')
                 ->get();
 
+            // Debug: Log vaccination data for first appointment if it exists
+            if ($appointments->count() > 0 && $appointments->first()->pets->count() > 0) {
+                $firstPet = $appointments->first()->pets->first();
+                \Log::info('Pet vaccine_details debug:', [
+                    'raw_vaccine_details' => $firstPet->getRawOriginal('vaccine_details'),
+                    'casted_vaccine_details' => $firstPet->vaccine_details,
+                    'type' => gettype($firstPet->vaccine_details)
+                ]);
+            }
+
             // Add inventory usage to each appointment
             foreach ($appointments as $appointment) {
                 $inventoryUsage = DB::table('inventory_usage')
@@ -513,6 +523,41 @@ class AdminController extends Controller
             $totalAppointments = array_sum($monthlyAppointments);
             $avgMonthlyAppointments = round($totalAppointments / 12, 1);
 
+            // Pet Type Analytics (Dog vs Cat)
+            $petTypes = DB::table('pets')
+                ->select('type', DB::raw('count(*) as count'))
+                ->groupBy('type')
+                ->get();
+
+            $petTypeData = [];
+            foreach ($petTypes as $petType) {
+                $petTypeData[$petType->type] = $petType->count;
+            }
+
+            // Pet Breed Analytics (Top 4 + Others)
+            $petBreeds = DB::table('pets')
+                ->select('breed', DB::raw('count(*) as count'))
+                ->groupBy('breed')
+                ->orderBy('count', 'desc')
+                ->get();
+
+            $breedData = [];
+            $otherBreedsCount = 0;
+            
+            foreach ($petBreeds as $index => $breed) {
+                if ($index < 4) {
+                    // Top 4 breeds
+                    $breedData[$breed->breed] = $breed->count;
+                } else {
+                    // All other breeds combined
+                    $otherBreedsCount += $breed->count;
+                }
+            }
+            
+            if ($otherBreedsCount > 0) {
+                $breedData['Other'] = $otherBreedsCount;
+            }
+
             // Monthly income for the last 12 months
             $monthlyIncome = [];
             for ($i = 11; $i >= 0; $i--) {
@@ -563,7 +608,9 @@ class AdminController extends Controller
                     'monthlyIncome' => $monthlyIncome,
                     'todayEarnings' => $todayEarnings,
                     'monthlyEarnings' => $monthlyEarnings,
-                    'avgMonthlyAppointments' => $avgMonthlyAppointments
+                    'avgMonthlyAppointments' => $avgMonthlyAppointments,
+                    'petTypes' => $petTypeData,
+                    'petBreeds' => $breedData
                 ]
             ], 200);
 
