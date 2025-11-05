@@ -743,12 +743,13 @@ class AdminController extends Controller
                 ]);
             }
 
-            // Add services
+            // Add services - find existing services or create new ones, then attach to appointment
             foreach ($validatedData['services'] as $serviceName) {
-                $appointment->services()->create([
-                    'name' => $serviceName,
-                    'description' => null
-                ]);
+                $service = \App\Models\Service::firstOrCreate(
+                    ['name' => $serviceName],
+                    ['description' => null]
+                );
+                $appointment->services()->attach($service->id);
             }
 
             // Load relationships for response
