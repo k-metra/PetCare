@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FaUserAlt, FaSignOutAlt, FaUserTimes, FaCog, FaCalendarAlt } from 'react-icons/fa';
+import { FaUserAlt, FaSignOutAlt, FaUserTimes, FaCog, FaCalendarAlt, FaBook } from 'react-icons/fa';
 import { logout, logoutAll } from '../utils/auth';
 import { useNavigate } from 'react-router-dom';
 
@@ -127,16 +127,29 @@ export default function UserMenu({ user }: UserMenuProps) {
                     <div className="py-1">
                         {/* My Appointments option for regular users */}
                         {user.role === 'user' && (
-                            <button 
-                                className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                                onClick={() => {
-                                    setIsOpen(false);
-                                    navigate('/my-appointments');
-                                }}
-                            >
-                                <FaCalendarAlt className="text-gray-400" />
-                                My Appointments
-                            </button>
+                            <>
+                                <button 
+                                    className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                    onClick={() => {
+                                        setIsOpen(false);
+                                        navigate('/my-appointments');
+                                    }}
+                                >
+                                    <FaCalendarAlt className="text-gray-400" />
+                                    My Appointments
+                                </button>
+                                
+                                <button 
+                                    className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                    onClick={() => {
+                                        setIsOpen(false);
+                                        navigate('/my-booklet');
+                                    }}
+                                >
+                                    <FaBook className="text-gray-400" />
+                                    My Booklet
+                                </button>
+                            </>
                         )}
 
                         {/* Account Settings */}
