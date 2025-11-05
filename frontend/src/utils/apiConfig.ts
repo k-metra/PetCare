@@ -21,6 +21,11 @@ export const apiUrl = {
   updateProfile: () => getApiUrl('api/profile'),
   changePassword: () => getApiUrl('api/change-password'),
   
+  // Phone Verification
+  sendPhoneVerification: () => getApiUrl('api/phone/send-verification'),
+  verifyPhone: () => getApiUrl('api/phone/verify'),
+  phoneVerificationStatus: () => getApiUrl('api/phone/status'),
+  
   // Appointments
   appointments: () => getApiUrl('api/appointments'),
   appointment: (id: number) => getApiUrl(`api/appointments/${id}`),
@@ -62,6 +67,11 @@ export const apiUrl = {
   // Staff Management
   staff: () => getApiUrl('api/admin/staff'),
   staffMember: (id: number) => getApiUrl(`api/admin/staff/${id}`),
+  
+  // Vaccination Records
+  vaccinationRecords: () => getApiUrl('api/vaccination-records'),
+  adminVaccinationRecords: () => getApiUrl('api/admin/vaccination-records'),
+  petVaccinationRecords: (userId: number, petId: number) => getApiUrl(`api/admin/vaccination-records/${userId}/${petId}`),
 };
 
 export default API_BASE_URL;
