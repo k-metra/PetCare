@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\MedicalRecordController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\PhoneVerificationController;
+use App\Http\Controllers\Api\VaccinationRecordController;
 use App\Http\Controllers\StaffController;
 
 Route::post('/register', [UserController::class, 'register']);
@@ -37,6 +39,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // Account settings routes
     Route::put('/profile', [UserController::class, 'updateProfile']);
     Route::put('/change-password', [UserController::class, 'changePassword']);
+    
+    // Phone verification routes
+    Route::post('/phone/send-verification', [PhoneVerificationController::class, 'sendVerificationCode']);
+    Route::post('/phone/verify', [PhoneVerificationController::class, 'verifyCode']);
+    Route::get('/phone/status', [PhoneVerificationController::class, 'getVerificationStatus']);
+    
+    // Vaccination booklet routes
+    Route::get('/vaccination-records', [VaccinationRecordController::class, 'getUserVaccinationRecords']);
 });
 
 // Protected appointment routes (require authentication)
@@ -96,6 +106,10 @@ Route::middleware(['auth:sanctum', 'role:staff,admin'])->group(function () {
     Route::get('/admin/dashboard', [AdminController::class, 'getDashboardStats']);
     Route::get('/admin/analytics', [AdminController::class, 'getAnalytics']);
     Route::get('/admin/recent-appointments', [AdminController::class, 'getRecentAppointments']);
+    
+    // Vaccination records management
+    Route::post('/admin/vaccination-records', [VaccinationRecordController::class, 'store']);
+    Route::get('/admin/vaccination-records/{userId}/{petId}', [VaccinationRecordController::class, 'getPetVaccinationRecords']);
     
     // Test route for debugging
     Route::post('/admin/test', function(Request $request) {
