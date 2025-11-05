@@ -9,6 +9,7 @@ interface User {
   name: string;
   email: string;
   phone_number?: string;
+  phone_verified_at?: string | null;
   email_verified_at: string | null;
   role?: string;
 }
@@ -18,7 +19,7 @@ const AccountSettings: React.FC = () => {
   const { showNotification } = useNotification();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'phone'>('profile');
 
   // Profile form data
   const [profileData, setProfileData] = useState({
@@ -31,6 +32,18 @@ const AccountSettings: React.FC = () => {
     new_password: '',
     new_password_confirmation: ''
   });
+
+  // Phone verification data
+  const [phoneVerificationData, setPhoneVerificationData] = useState({
+    phone_number: '',
+    verification_code: ''
+  });
+  const [phoneVerificationStatus, setPhoneVerificationStatus] = useState<{
+    is_verified: boolean;
+    verified_at: string | null;
+  } | null>(null);
+  const [verificationStep, setVerificationStep] = useState<'enter_phone' | 'enter_code'>('enter_phone');
+  const [codeSent, setCodeSent] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -171,6 +184,137 @@ const AccountSettings: React.FC = () => {
     }
   };
 
+  // Phone verification functions
+  const fetchPhoneVerificationStatus = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(apiUrl.phoneVerificationStatus(), {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (data.status) {
+        setPhoneVerificationStatus(data.data);
+        setPhoneVerificationData(prev => ({
+          ...prev,
+          phone_number: data.data.phone_number || ''
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching phone verification status:', error);
+    }
+  };
+
+  const sendVerificationCode = async () => {
+    if (!phoneVerificationData.phone_number) {
+      showNotification('Please enter a phone number', 'error');
+      return;
+    }
+
+    if (!validatePhoneNumber(phoneVerificationData.phone_number)) {
+      showNotification('Please enter a valid Philippine phone number', 'error');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(apiUrl.sendPhoneVerification(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ phone_number: phoneVerificationData.phone_number })
+      });
+
+      const data = await response.json();
+      console.log('Phone verification response:', data); // Debug log
+
+      if (data.status) {
+        setCodeSent(true);
+        setVerificationStep('enter_code');
+        const debugCode = data.debug?.code;
+        showNotification(
+          `Verification code sent to ${phoneVerificationData.phone_number}!${debugCode ? ` Code: ${debugCode}` : ''}`, 
+          'success'
+        );
+      } else {
+        showNotification(data.message || 'Failed to send verification code', 'error');
+      }
+    } catch (error) {
+      console.error('Error sending verification code:', error);
+      showNotification('An error occurred while sending verification code', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyPhoneCode = async () => {
+    if (!phoneVerificationData.verification_code) {
+      showNotification('Please enter the verification code', 'error');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(apiUrl.verifyPhone(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ verification_code: phoneVerificationData.verification_code })
+      });
+
+      const data = await response.json();
+
+      if (data.status) {
+        showNotification('Phone number verified successfully! 🎉', 'success');
+        setPhoneVerificationStatus({
+          is_verified: true,
+          verified_at: data.phone_verified_at
+        });
+        setVerificationStep('enter_phone');
+        setCodeSent(false);
+        setPhoneVerificationData(prev => ({
+          ...prev,
+          verification_code: ''
+        }));
+        
+        // Update user data in localStorage
+        const updatedUser: User = { 
+          ...user, 
+          phone_verified_at: data.phone_verified_at 
+        } as User;
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        setUser(updatedUser);
+      } else {
+        showNotification(data.message || 'Invalid verification code', 'error');
+      }
+    } catch (error) {
+      console.error('Error verifying phone code:', error);
+      showNotification('An error occurred while verifying code', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch phone verification status on component mount
+  useEffect(() => {
+    if (user) {
+      fetchPhoneVerificationStatus();
+    }
+  }, [user]);
+
   if (!user) {
     return (
       <>
@@ -216,6 +360,16 @@ const AccountSettings: React.FC = () => {
                   }`}
                 >
                   Change Password
+                </button>
+                <button
+                  onClick={() => setActiveTab('phone')}
+                  className={`py-2 px-4 border-b-2 font-medium text-sm ${
+                    activeTab === 'phone'
+                      ? 'border-teal-500 text-teal-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Phone Verification
                 </button>
               </nav>
             </div>
@@ -345,6 +499,125 @@ const AccountSettings: React.FC = () => {
                       {loading ? 'Changing Password...' : 'Change Password'}
                     </button>
                   </form>
+                </div>
+              )}
+
+              {/* Phone Verification Tab */}
+              {activeTab === 'phone' && (
+                <div className="max-w-md">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Phone Verification</h3>
+                  
+                  {/* Current Status */}
+                  {phoneVerificationStatus && (
+                    <div className={`mb-6 p-4 rounded-lg ${
+                      phoneVerificationStatus.is_verified 
+                        ? 'bg-green-50 border border-green-200' 
+                        : 'bg-yellow-50 border border-yellow-200'
+                    }`}>
+                      <div className="flex items-center">
+                        <div className={`w-2 h-2 rounded-full mr-2 ${
+                          phoneVerificationStatus.is_verified ? 'bg-green-500' : 'bg-yellow-500'
+                        }`}></div>
+                        <span className={`text-sm font-medium ${
+                          phoneVerificationStatus.is_verified ? 'text-green-800' : 'text-yellow-800'
+                        }`}>
+                          {phoneVerificationStatus.is_verified ? 'Verified' : 'Unverified'}
+                        </span>
+                      </div>
+                      {phoneVerificationStatus.is_verified && phoneVerificationStatus.verified_at && (
+                        <p className="text-xs text-green-600 mt-1">
+                          Verified on {new Date(phoneVerificationStatus.verified_at).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Phone Number Input */}
+                  {verificationStep === 'enter_phone' && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Phone Number
+                        </label>
+                        <input
+                          type="tel"
+                          value={phoneVerificationData.phone_number}
+                          onChange={(e) => setPhoneVerificationData(prev => ({ ...prev, phone_number: e.target.value }))}
+                          placeholder="e.g., 09123456789"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Enter a valid Philippine phone number
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={sendVerificationCode}
+                        disabled={loading || !phoneVerificationData.phone_number}
+                        className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
+                          loading || !phoneVerificationData.phone_number
+                            ? 'bg-gray-400 text-white cursor-not-allowed'
+                            : 'bg-teal-600 text-white hover:bg-teal-700'
+                        }`}
+                      >
+                        {loading ? 'Sending Code...' : 'Send Verification Code'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Verification Code Input */}
+                  {verificationStep === 'enter_code' && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Verification Code
+                        </label>
+                        <input
+                          type="text"
+                          value={phoneVerificationData.verification_code}
+                          onChange={(e) => setPhoneVerificationData(prev => ({ ...prev, verification_code: e.target.value }))}
+                          placeholder="Enter 6-digit code"
+                          maxLength={6}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent text-center text-2xl tracking-widest"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Check your phone for the verification code sent to {phoneVerificationData.phone_number}
+                        </p>
+                      </div>
+
+                      <div className="flex space-x-3">
+                        <button
+                          onClick={() => {
+                            setVerificationStep('enter_phone');
+                            setCodeSent(false);
+                            setPhoneVerificationData(prev => ({ ...prev, verification_code: '' }));
+                          }}
+                          className="flex-1 py-2 px-4 border border-gray-300 rounded-md font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          Back
+                        </button>
+                        <button
+                          onClick={verifyPhoneCode}
+                          disabled={loading || phoneVerificationData.verification_code.length !== 6}
+                          className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
+                            loading || phoneVerificationData.verification_code.length !== 6
+                              ? 'bg-gray-400 text-white cursor-not-allowed'
+                              : 'bg-teal-600 text-white hover:bg-teal-700'
+                          }`}
+                        >
+                          {loading ? 'Verifying...' : 'Verify Code'}
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={sendVerificationCode}
+                        disabled={loading}
+                        className="w-full py-2 px-4 border border-teal-600 text-teal-600 rounded-md font-medium hover:bg-teal-50 transition-colors"
+                      >
+                        Resend Code
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
