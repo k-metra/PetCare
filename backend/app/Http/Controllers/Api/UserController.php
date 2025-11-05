@@ -51,12 +51,39 @@ class UserController extends Controller
             $validatedData = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
+            'phone_number' => [
+                'required',
+                'string',
+                'unique:users',
+                function ($attribute, $value, $fail) {
+                    // Philippine phone number validation
+                    $patterns = [
+                        '/^09\d{9}$/',           // 09xxxxxxxxx (11 digits)
+                        '/^\+639\d{9}$/',        // +639xxxxxxxxx
+                        '/^639\d{9}$/',          // 639xxxxxxxxx
+                        '/^9\d{9}$/',            // 9xxxxxxxxx (10 digits)
+                    ];
+                    
+                    $isValid = false;
+                    foreach ($patterns as $pattern) {
+                        if (preg_match($pattern, $value)) {
+                            $isValid = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!$isValid) {
+                        $fail('Please enter a valid Philippine phone number (e.g., 09xxxxxxxxx, +639xxxxxxxxx).');
+                    }
+                },
+            ],
             'password' => 'required|string|min:8',
             ]);
 
             $user = User::create([
                 'name' => $validatedData['name'],
                 'email' => $validatedData['email'],
+                'phone_number' => $validatedData['phone_number'],
                 'password' => bcrypt($validatedData['password']),
             ]);
 
