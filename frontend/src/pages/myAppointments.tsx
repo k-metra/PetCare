@@ -16,7 +16,8 @@ import {
     FaSpinner,
     FaPlus,
     FaClipboardList,
-    FaEye
+    FaEye,
+    FaBook
 } from 'react-icons/fa';
 
 interface Pet {
@@ -365,13 +366,22 @@ export default function MyAppointments() {
                                     View and track the status of your veterinary appointments
                                 </p>
                             </div>
-                            <button
-                                onClick={() => navigate('/set-appointment')}
-                                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-                            >
-                                <FaPlus />
-                                Book New Appointment
-                            </button>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => navigate('/my-booklet')}
+                                    className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg transition-colors"
+                                >
+                                    <FaBook />
+                                    My Booklet
+                                </button>
+                                <button
+                                    onClick={() => navigate('/set-appointment')}
+                                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                                >
+                                    <FaPlus />
+                                    Book New Appointment
+                                </button>
+                            </div>
                         </div>
                     </div>
 
