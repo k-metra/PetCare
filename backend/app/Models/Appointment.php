@@ -44,4 +44,12 @@ class Appointment extends Model
     {
         return $this->belongsToMany(Service::class);
     }
+
+    /**
+     * Get the medical records for the appointment.
+     */
+    public function medicalRecords(): HasMany
+    {
+        return $this->hasMany(MedicalRecord::class);
+    }
 }
