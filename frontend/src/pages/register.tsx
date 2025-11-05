@@ -11,7 +11,7 @@ import { motion } from 'framer-motion'
 import { useState } from 'react'
 
 export default function Register() {
-    const [credentials, setCredentials] = useState({name: '', email: '', password: ''})
+    const [credentials, setCredentials] = useState({name: '', email: '', phone_number: '', password: ''})
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const navigate = useNavigate();
@@ -84,6 +84,7 @@ export default function Register() {
                 <form onSubmit={handleSubmit} className="flex flex-col gap-6 mt-10">
                     <InputField name="name" placeholder="Full Name" type="text" onChange={handleChange} />
                     <InputField name="email" placeholder="Email" type="text" onChange={handleChange} />
+                    <InputField name="phone_number" placeholder="Phone Number" type="tel" onChange={handleChange} />
                     <InputField name="password" placeholder="Password" type="password" onChange={handleChange} />
                     <motion.button whileHover={{scale:1.05, transition: {type:"tween", duration:0.3, ease:'backOut'}}} whileTap={{scale:0.95, transition: {duration:0.2, type:"spring"}}} type="submit" disabled={loading} className={`bg-brand-primary-500 border border-black/20 drop-shadow-lg text-white py-2 rounded-lg  transition-colors duration-200 disabled:cursor-not-allowed disabled:text-white/50`}>{loading ? 'Registering...' : 'Register'}</motion.button>
                 </form>
