@@ -19,7 +19,8 @@ import {
   FaEye,
   FaEdit,
   FaTimes,
-  FaTrash
+  FaTrash,
+  FaSyringe
 } from 'react-icons/fa';
 
 interface DashboardStats {
@@ -599,6 +600,40 @@ const AdminDashboard: React.FC = () => {
       console.error('Error fetching customers:', error);
     } finally {
       setCustomersLoading(false);
+    }
+  };
+
+  // View pet vaccination records
+  const viewPetVaccinationRecords = async (userId: number, petId: number, petName: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(apiUrl.petVaccinationRecords(userId, petId), {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.status) {
+        if (data.vaccination_records.length === 0) {
+          alert(`No vaccination records found for ${petName}`);
+        } else {
+          // Create a simple modal or alert with vaccination records
+          const recordsText = data.vaccination_records.map((record: any) => 
+            `• ${record.given_date}: ${record.vaccine_name} (by ${record.veterinarian})${record.diagnosis ? ` - ${record.diagnosis}` : ''}`
+          ).join('\n');
+          
+          alert(`Vaccination Records for ${petName}:\n\n${recordsText}`);
+        }
+      } else {
+        alert(`Failed to fetch vaccination records: ${data.message}`);
+      }
+    } catch (error) {
+      console.error('Error fetching pet vaccination records:', error);
+      alert('An error occurred while fetching vaccination records');
     }
   };
 
@@ -3753,14 +3788,25 @@ const AdminDashboard: React.FC = () => {
                               <div>
                                 <h3 className="text-lg font-medium text-gray-900">{customer.name}</h3>
                                 <p className="text-sm text-gray-500">{customer.email}</p>
-                                <p className="text-sm text-gray-500">
-                                  📞 {customer.phone_number || 'No phone number set'}
-                                </p>
-                                {customer.email_verified_at && (
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 mt-1">
-                                    Verified
-                                  </span>
-                                )}
+                                <div className="flex items-center space-x-2 text-sm text-gray-500">
+                                  <span>📞 {customer.phone_number || 'No phone number set'}</span>
+                                  {customer.phone_number && (
+                                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                      customer.phone_verified_at 
+                                        ? 'bg-green-100 text-green-800' 
+                                        : 'bg-yellow-100 text-yellow-800'
+                                    }`}>
+                                      {customer.phone_verified_at ? 'Phone Verified' : 'Phone Unverified'}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center space-x-2 mt-1">
+                                  {customer.email_verified_at && (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                      Email Verified
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             <div className="text-right">
@@ -3814,7 +3860,18 @@ const AdminDashboard: React.FC = () => {
                                           <p className="text-sm text-gray-500">
                                             {pet.appointments.length} visit{pet.appointments.length !== 1 ? 's' : ''}
                                           </p>
-                                          <div className="mt-1">
+                                          <div className="flex items-center gap-2 mt-1">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                viewPetVaccinationRecords(customer.id, pet.id, pet.name);
+                                              }}
+                                              className="text-teal-600 hover:text-teal-800 text-xs flex items-center gap-1"
+                                              title="View Vaccination Records"
+                                            >
+                                              <FaSyringe />
+                                              Vaccines
+                                            </button>
                                             {expandedPet === `${customer.id}-${petIndex}` ? (
                                               <FaTimes className="text-gray-400 text-sm" />
                                             ) : (
