@@ -43,14 +43,20 @@ export default function NavBar() {
                 <NavItem href="/home">Home</NavItem>
                 <NavItem href="/home#about">About</NavItem>
                 <NavItem href="/home#services">Services</NavItem>
-                <NavItem href="/set-appointment">Book Appointment</NavItem>
+                {/* Only show Book Appointment for regular users or when not logged in */}
+                {(!user || user.role === 'user') && (
+                    <NavItem href="/set-appointment">Book Appointment</NavItem>
+                )}
                 {user && user.role === 'user' && (
                     <NavItem href="/my-appointments">My Appointments</NavItem>
                 )}
                 {user && ['admin', 'staff'].includes(user.role) && (
                     <NavItem href="/admin-dashboard">Dashboard</NavItem>
                 )}
-                <NavItem href="/home#contact">Contact</NavItem>
+                {/* Only show Contact for regular users or when not logged in */}
+                {(!user || user.role === 'user') && (
+                    <NavItem href="/home#contact">Contact</NavItem>
+                )}
                 {!localStorage.getItem('token') && (
                     <NavItem href="/login">Login</NavItem>
                 )}
@@ -66,14 +72,20 @@ export default function NavBar() {
             <NavItem href="/home">Home</NavItem>
             <NavItem href="/home#about">About</NavItem>
             <NavItem href="/home#services">Services</NavItem>
-            <NavItem href="/set-appointment">Book Appointment</NavItem>
+            {/* Only show Book Appointment for regular users or when not logged in */}
+            {(!user || user.role === 'user') && (
+                <NavItem href="/set-appointment">Book Appointment</NavItem>
+            )}
             {user && user.role === 'user' && (
                 <NavItem href="/my-appointments">My Appointments</NavItem>
             )}
             {user && ['admin', 'staff'].includes(user.role) && (
                 <NavItem href="/admin-dashboard">Dashboard</NavItem>
             )}
-            <NavItem href="/home#contact">Contact</NavItem>
+            {/* Only show Contact for regular users or when not logged in */}
+            {(!user || user.role === 'user') && (
+                <NavItem href="/home#contact">Contact</NavItem>
+            )}
             {!localStorage.getItem('token') ? (
                 <NavItem href="/login">Login</NavItem>
             ) : (
