@@ -1016,6 +1016,7 @@ class AdminController extends Controller
                     'name' => $customer->name,
                     'email' => $customer->email,
                     'phone_number' => $customer->phone_number,
+                    'phone_verified_at' => $customer->phone_verified_at,
                     'email_verified_at' => $customer->email_verified_at,
                     'created_at' => $customer->created_at,
                     'total_appointments' => $customer->appointments->count(),
