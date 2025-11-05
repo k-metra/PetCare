@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'sms' => [
+        'enabled' => env('SMS_ENABLED', false),
+        'movider_api_key' => env('MOVIDER_API_KEY'),
+    ],
+
 ];
