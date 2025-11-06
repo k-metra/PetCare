@@ -156,16 +156,54 @@ class AppointmentController extends Controller
                 'status' => $appointment->status
             ]);
 
-            // Create pets for this appointment
+            // Create pets for this appointment - check for existing pets with same name/breed
             foreach ($request->pets as $petData) {
-                $appointment->pets()->create([
-                    'type' => $petData['type'],
-                    'breed' => $petData['breed'],
-                    'name' => $petData['name'],
-                    'grooming_details' => $petData['groomingDetails'] ?? null,
-                    'dental_care_details' => $petData['dentalCareDetails'] ?? null,
-                    'vaccine_details' => $petData['vaccineDetails'] ?? null
-                ]);
+                // Check if user already has a pet with the same name and breed
+                $existingPet = \App\Models\Pet::whereHas('appointment', function ($query) use ($request) {
+                    $query->where('user_id', $request->user()->id);
+                })
+                ->where('name', $petData['name'])
+                ->where('breed', $petData['breed'])
+                ->where('type', $petData['type'])
+                ->first();
+
+                if ($existingPet) {
+                    // Update existing pet with new details if provided
+                    $updateData = [];
+                    if (isset($petData['groomingDetails']) && $petData['groomingDetails']) {
+                        $updateData['grooming_details'] = $petData['groomingDetails'];
+                    }
+                    if (isset($petData['dentalCareDetails']) && $petData['dentalCareDetails']) {
+                        $updateData['dental_care_details'] = $petData['dentalCareDetails'];
+                    }
+                    if (isset($petData['vaccineDetails']) && $petData['vaccineDetails']) {
+                        $updateData['vaccine_details'] = $petData['vaccineDetails'];
+                    }
+                    
+                    if (!empty($updateData)) {
+                        $existingPet->update($updateData);
+                    }
+
+                    // Create a new pet record for this appointment that references the same logical pet
+                    $appointment->pets()->create([
+                        'type' => $petData['type'],
+                        'breed' => $petData['breed'],
+                        'name' => $petData['name'],
+                        'grooming_details' => $petData['groomingDetails'] ?? null,
+                        'dental_care_details' => $petData['dentalCareDetails'] ?? null,
+                        'vaccine_details' => $petData['vaccineDetails'] ?? null
+                    ]);
+                } else {
+                    // Create new pet
+                    $appointment->pets()->create([
+                        'type' => $petData['type'],
+                        'breed' => $petData['breed'],
+                        'name' => $petData['name'],
+                        'grooming_details' => $petData['groomingDetails'] ?? null,
+                        'dental_care_details' => $petData['dentalCareDetails'] ?? null,
+                        'vaccine_details' => $petData['vaccineDetails'] ?? null
+                    ]);
+                }
             }
 
             // Attach services to the appointment
