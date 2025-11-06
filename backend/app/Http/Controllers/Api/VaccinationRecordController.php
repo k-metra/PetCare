@@ -42,8 +42,11 @@ class VaccinationRecordController extends Controller
             
             foreach ($vaccinationRecords as $record) {
                 foreach ($record->appointment->pets as $pet) {
-                    if (!isset($vaccinationsByPet[$pet->id])) {
-                        $vaccinationsByPet[$pet->id] = [
+                    // Use name+breed+type as the key to merge pets with same details
+                    $petKey = $pet->name . '|' . $pet->breed . '|' . $pet->type;
+                    
+                    if (!isset($vaccinationsByPet[$petKey])) {
+                        $vaccinationsByPet[$petKey] = [
                             'pet_id' => $pet->id,
                             'pet_name' => $pet->name,
                             'pet_type' => $pet->type,
@@ -59,7 +62,7 @@ class VaccinationRecordController extends Controller
                         $doctorName = $medicalRecord->doctor_name;
                     }
                     
-                    $vaccinationsByPet[$pet->id]['vaccination_records'][] = [
+                    $vaccinationsByPet[$petKey]['vaccination_records'][] = [
                         'id' => $record->id,
                         'given_date' => $record->created_at->format('Y-m-d'),
                         'vaccine_name' => $record->product->name,
@@ -69,6 +72,13 @@ class VaccinationRecordController extends Controller
                         'diagnosis' => $record->appointment->notes
                     ];
                 }
+            }
+            
+            // Sort vaccination records by date for each pet (newest first)
+            foreach ($vaccinationsByPet as &$petData) {
+                usort($petData['vaccination_records'], function($a, $b) {
+                    return strtotime($b['given_date']) - strtotime($a['given_date']);
+                });
             }
             
             return response()->json([
@@ -121,23 +131,25 @@ class VaccinationRecordController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-            // Get all vaccination records and organize by pet
-            $allPetVaccinations = [];
+            // Get vaccination records only for the specific pet
+            $petVaccinations = [];
             foreach ($vaccinationRecords as $record) {
-                foreach ($record->appointment->pets as $pet) {
+                // Check if this appointment included the specific pet
+                $targetPet = $record->appointment->pets->where('id', $petId)->first();
+                if ($targetPet) {
                     // Get doctor name from medical record for this appointment and pet
                     $doctorName = 'Name Not Set';
-                    $medicalRecord = $record->appointment->medicalRecords->where('pet_id', $pet->id)->first();
+                    $medicalRecord = $record->appointment->medicalRecords->where('pet_id', $petId)->first();
                     if ($medicalRecord && $medicalRecord->doctor_name) {
                         $doctorName = $medicalRecord->doctor_name;
                     }
                     
-                    $allPetVaccinations[] = [
+                    $petVaccinations[] = [
                         'id' => $record->id,
-                        'pet_id' => $pet->id,
-                        'pet_name' => $pet->name,
-                        'pet_type' => $pet->type,
-                        'pet_breed' => $pet->breed,
+                        'pet_id' => $targetPet->id,
+                        'pet_name' => $targetPet->name,
+                        'pet_type' => $targetPet->type,
+                        'pet_breed' => $targetPet->breed,
                         'given_date' => $record->created_at->format('Y-m-d'),
                         'vaccine_name' => $record->product->name,
                         'quantity' => $record->quantity_used,
@@ -150,8 +162,8 @@ class VaccinationRecordController extends Controller
 
             return response()->json([
                 'status' => true,
-                'vaccination_records' => $allPetVaccinations,
-                'message' => count($allPetVaccinations) > 0 ? 'Vaccination records found' : 'No vaccination records found for this user'
+                'vaccination_records' => $petVaccinations,
+                'message' => count($petVaccinations) > 0 ? 'Vaccination records found' : 'No vaccination records found for this pet'
             ], 200);
 
         } catch (\Exception $e) {
