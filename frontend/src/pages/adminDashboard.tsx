@@ -234,6 +234,10 @@ const AdminDashboard: React.FC = () => {
   const [recordsSearchTerm, setRecordsSearchTerm] = useState('');
   const [selectedPetRecord, setSelectedPetRecord] = useState<any | null>(null);
   const [showPetRecordModal, setShowPetRecordModal] = useState(false);
+  // Vaccination records modal state (for admin viewing a customer's pet vaccinations)
+  const [showVaccinationModal, setShowVaccinationModal] = useState(false);
+  const [vaccinationModalRecords, setVaccinationModalRecords] = useState<any[]>([]);
+  const [vaccinationModalPet, setVaccinationModalPet] = useState<{ id: number; name: string } | null>(null);
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [recentRecords, setRecentRecords] = useState<Appointment[]>([]);
 
@@ -603,7 +607,7 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // View pet vaccination records
+  // View pet vaccination records (opens modal)
   const viewPetVaccinationRecords = async (userId: number, petId: number, petName: string) => {
     try {
       const token = localStorage.getItem('token');
@@ -617,23 +621,22 @@ const AdminDashboard: React.FC = () => {
 
       const data = await response.json();
 
-      if (data.status) {
-        if (data.vaccination_records.length === 0) {
-          alert(`No vaccination records found for ${petName}`);
-        } else {
-          // Create a simple modal or alert with vaccination records
-          const recordsText = data.vaccination_records.map((record: any) => 
-            `• ${record.given_date}: ${record.vaccine_name} (by ${record.veterinarian})${record.diagnosis ? ` - ${record.diagnosis}` : ''}`
-          ).join('\n');
-          
-          alert(`Vaccination Records for ${petName}:\n\n${recordsText}`);
-        }
-      } else {
-        alert(`Failed to fetch vaccination records: ${data.message}`);
+      // Open modal and show records (empty array if none)
+      setVaccinationModalPet({ id: petId, name: petName });
+      setVaccinationModalRecords(Array.isArray(data.vaccination_records) ? data.vaccination_records : []);
+      setShowVaccinationModal(true);
+
+      if (!data.status) {
+        // Show a notification but still open the modal (it will show empty state)
+        showNotification(`Failed to fetch vaccination records: ${data.message}`, 'error');
       }
     } catch (error) {
       console.error('Error fetching pet vaccination records:', error);
-      alert('An error occurred while fetching vaccination records');
+      // Open modal with empty state and notify
+      setVaccinationModalPet({ id: petId, name: petName });
+      setVaccinationModalRecords([]);
+      setShowVaccinationModal(true);
+      showNotification('An error occurred while fetching vaccination records', 'error');
     }
   };
 
@@ -1286,19 +1289,18 @@ const AdminDashboard: React.FC = () => {
     if (!medicalExam) return;
     const updatedRecords = [...medicalExam.petRecords];
     updatedRecords[petIndex] = { ...updatedRecords[petIndex], [field]: value };
-    
+
     // Calculate total cost
     const totalCost = updatedRecords.reduce((sum, record) => {
       return sum + record.selectedTests.reduce((testSum, test) => testSum + test.price, 0);
     }, 0);
-    
+
     setMedicalExam({
       ...medicalExam,
       petRecords: updatedRecords,
       totalCost,
     });
   };
-
   const toggleTestSelection = (petIndex: number, test: TestOption) => {
     if (!medicalExam) return;
     const updatedRecords = [...medicalExam.petRecords];
@@ -6470,6 +6472,61 @@ const AdminDashboard: React.FC = () => {
         </div>
       )}
       
+      {/* Vaccination Records Modal (Admin view - mirrors My Booklet) */}
+      {showVaccinationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-gray-900">Vaccination Records - {vaccinationModalPet?.name}</h3>
+              <button
+                onClick={() => { setShowVaccinationModal(false); setVaccinationModalRecords([]); setVaccinationModalPet(null); }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <FaTimes className="text-xl" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="px-6 py-4 space-y-4">
+              {vaccinationModalRecords.length === 0 ? (
+                <div className="p-6 text-center text-gray-600">No vaccination records found for this pet.</div>
+              ) : (
+                <div className="space-y-4">
+                  {vaccinationModalRecords.map((rec: any, idx: number) => (
+                    <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium text-gray-900">{rec.vaccine_name}</h4>
+                          <p className="text-sm text-gray-600">Given: {new Date(rec.given_date).toLocaleDateString()}</p>
+                          {rec.diagnosis && <p className="text-sm text-gray-600">Note: {rec.diagnosis}</p>}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-600">Qty: {rec.quantity}</p>
+                          <p className="text-sm text-gray-600">Vet: {rec.veterinarian || 'Name Not Set'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4">
+              <div className="flex justify-end">
+                <button
+                  onClick={() => { setShowVaccinationModal(false); setVaccinationModalRecords([]); setVaccinationModalPet(null); }}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Walk-In Grooming Selection Modal */}
       {showWalkInGroomingModal && currentWalkInPetForGrooming !== null && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
