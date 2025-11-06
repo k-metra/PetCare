@@ -52,6 +52,7 @@ const MyBooklet: React.FC = () => {
       const data = await response.json();
 
       if (data.status) {
+        // Backend now handles pet merging, so use data directly
         setVaccinationData(data.vaccination_records);
         if (data.vaccination_records.length > 0) {
           setSelectedPet(data.vaccination_records[0].pet_id);
