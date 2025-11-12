@@ -17,13 +17,19 @@ import {
     FaPlus,
     FaClipboardList,
     FaEye,
-    FaBook
+    FaBook,
+    FaUserMd,
+    FaSyringe,
+    FaBone,
+    FaEdit,
+    FaHistory
 } from 'react-icons/fa';
 
 interface Pet {
     id: number;
     type: string;
     breed: string;
+    name: string;
 }
 
 interface Service {
@@ -66,12 +72,25 @@ interface Appointment {
     medical_records?: MedicalRecord[];
 }
 
+interface PetAppointmentGroup {
+    pet_name: string;
+    pet_type: string;
+    pet_breed: string;
+    appointments: Appointment[];
+}
+
 export default function MyAppointments() {
     const { showNotification } = useNotification();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
+    
+    // Pet selection state (like My Booklet)
+    const [selectedPetData, setSelectedPetData] = useState<PetAppointmentGroup | null>(null);
+    
+    // Pending appointments expansion state
+    const [showAllPending, setShowAllPending] = useState(false);
     
     // Reschedule modal state
     const [showRescheduleModal, setShowRescheduleModal] = useState(false);
@@ -88,20 +107,20 @@ export default function MyAppointments() {
 
     const navigate = useNavigate();
 
-    // Available time slots from 8 AM to 3 PM (same as set-appointment page)
+    // Available time slots from 8 AM to 3 PM
     const timeSlots = [
         '8:00 AM', '8:30 AM', '9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM',
         '11:00 AM', '11:30 AM', '12:00 PM', '12:30 PM', '1:00 PM', '1:30 PM',
         '2:00 PM', '2:30 PM', '3:00 PM'
     ];
 
-    // Disable Sundays and past dates (including today)
+    // Disable Sundays and past dates
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     
     const disabledDays = [
-        { before: tomorrow }, // Past dates and today
-        { dayOfWeek: [0] } // Sundays (0 = Sunday)
+        { before: tomorrow },
+        { dayOfWeek: [0] }
     ];
 
     useEffect(() => {
@@ -116,9 +135,12 @@ export default function MyAppointments() {
 
     useEffect(() => {
         if (action && appointmentId) {
-            // Modal will be shown based on action and appointmentId state
+            if (action === 'reschedule') {
+                setRescheduleAppointmentId(parseInt(appointmentId));
+                setShowRescheduleModal(true);
+            }
         }
-    }, [action, appointmentId])
+    }, [action, appointmentId]);
 
     const fetchAppointments = async () => {
         try {
@@ -135,7 +157,30 @@ export default function MyAppointments() {
             const data = await response.json();
             
             if (data.status) {
-                setAppointments(data.appointments);
+                // Fetch medical records for completed appointments
+                const appointmentsWithMedical = await Promise.all(
+                    data.appointments.map(async (appointment: Appointment) => {
+                        if (appointment.status === 'completed') {
+                            try {
+                                const medicalResponse = await fetch(apiUrl.medicalRecordsByAppointment(appointment.id), {
+                                    headers: {
+                                        'Authorization': `Bearer ${token}`,
+                                        'Accept': 'application/json'
+                                    }
+                                });
+                                const medicalData = await medicalResponse.json();
+                                if (medicalData.status && medicalData.records) {
+                                    appointment.medical_records = medicalData.records;
+                                }
+                            } catch (error) {
+                                console.error('Error fetching medical records:', error);
+                            }
+                        }
+                        return appointment;
+                    })
+                );
+                
+                setAppointments(appointmentsWithMedical);
                 setError('');
             } else {
                 setError('Failed to fetch appointments');
@@ -148,6 +193,90 @@ export default function MyAppointments() {
         }
     };
 
+    // Helper function to get pet type icon
+    const getPetTypeIcon = (type: string) => {
+        switch (type.toLowerCase()) {
+            case 'dog':
+                return '🐕';
+            case 'cat':
+                return '🐱';
+            case 'bird':
+                return '🐦';
+            case 'rabbit':
+                return '🐰';
+            case 'hamster':
+                return '🐹';
+            default:
+                return '🐾';
+        }
+    };
+
+    // Helper function to organize appointments
+    const organizeAppointments = () => {
+        const pending = appointments
+            .filter(apt => apt.status === 'pending')
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        const confirmedAndCompleted = appointments
+            .filter(apt => apt.status === 'confirmed' || apt.status === 'completed')
+            .sort((a, b) => new Date(a.appointment_date).getTime() - new Date(b.appointment_date).getTime());
+
+        return { pending, confirmedAndCompleted };
+    };
+
+    // Helper function to group appointments by pet (like My Booklet)
+    const groupAppointmentsByPet = (appointments: Appointment[]): PetAppointmentGroup[] => {
+        const petGroups: { [key: string]: PetAppointmentGroup } = {};
+
+        appointments.forEach(appointment => {
+            appointment.pets.forEach(pet => {
+                const petKey = `${pet.name}-${pet.breed}`.toLowerCase();
+                
+                if (!petGroups[petKey]) {
+                    petGroups[petKey] = {
+                        pet_name: pet.name,
+                        pet_type: pet.type,
+                        pet_breed: pet.breed,
+                        appointments: []
+                    };
+                }
+                
+                // Only add appointment if it's not already in the group
+                if (!petGroups[petKey].appointments.find(apt => apt.id === appointment.id)) {
+                    petGroups[petKey].appointments.push(appointment);
+                }
+            });
+        });
+
+        // Sort appointments within each pet group by date (newest first)
+        Object.values(petGroups).forEach(group => {
+            group.appointments.sort((a, b) => new Date(b.appointment_date).getTime() - new Date(a.appointment_date).getTime());
+        });
+
+        return Object.values(petGroups);
+    };
+
+    // Format date helper
+    const formatDate = (dateString: string) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    };
+
+    // Format time helper
+    const formatTime = (timeString: string) => {
+        const [hours, minutes] = timeString.split(':');
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour % 12 || 12;    
+        return `${displayHour}:${minutes}`;
+    };
+
+    // Status helpers
     const getStatusIcon = (status: string) => {
         switch (status) {
             case 'pending':
@@ -178,34 +307,7 @@ export default function MyAppointments() {
         }
     };
 
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-        });
-    };
-
-    const formatTime = (timeString: string) => {
-        // Convert 24-hour format to 12-hour format
-        const [hours, minutes] = timeString.split(':');
-        const hour = parseInt(hours);
-        const ampm = hour >= 12 ? 'PM' : '';
-        const displayHour = hour % 12 || 12;
-        return `${displayHour}:${minutes} ${ampm}`;
-    };
-
-    const isUpcoming = (dateString: string, timeString: string) => {
-        const appointmentDateTime = new Date(`${dateString} ${timeString}`);
-        return appointmentDateTime > new Date();
-    };
-
-    const closeModal = () => {
-        navigate('/my-appointments', { replace: true });
-    };
-
+    // Reschedule functions
     const handleRescheduleClick = (appointmentId: number) => {
         setRescheduleAppointmentId(appointmentId);
         setNewSelectedDate(undefined);
@@ -218,6 +320,8 @@ export default function MyAppointments() {
         setRescheduleAppointmentId(null);
         setNewSelectedDate(undefined);
         setNewSelectedTime('');
+        // Clear URL parameters
+        navigate('/my-appointments', { replace: true });
     };
 
     const convertTo24Hour = (time12h: string): string => {
@@ -243,7 +347,13 @@ export default function MyAppointments() {
             const token = localStorage.getItem('token');
             const time24h = convertTo24Hour(newSelectedTime);
             
-            const response = await fetch(apiUrl.appointment(rescheduleAppointmentId), {
+            // Format date in local timezone to avoid timezone issues
+            const year = newSelectedDate.getFullYear();
+            const month = String(newSelectedDate.getMonth() + 1).padStart(2, '0');
+            const day = String(newSelectedDate.getDate()).padStart(2, '0');
+            const formattedDate = `${year}-${month}-${day}`;
+            
+            const response = await fetch(apiUrl.rescheduleAppointment(rescheduleAppointmentId), {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -251,7 +361,7 @@ export default function MyAppointments() {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    appointment_date: newSelectedDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
+                    appointment_date: formattedDate,
                     appointment_time: time24h
                 })
             });
@@ -259,21 +369,9 @@ export default function MyAppointments() {
             const data = await response.json();
             
             if (data.status) {
-                // Update local state
-                setAppointments(prev => 
-                    prev.map(apt => 
-                        apt.id === rescheduleAppointmentId 
-                            ? { 
-                                ...apt, 
-                                appointment_date: newSelectedDate.toISOString().split('T')[0],
-                                appointment_time: time24h
-                              }
-                            : apt
-                    )
-                );
-                setError('');
-                closeRescheduleModal();
                 showNotification('Appointment rescheduled successfully! 🎉', 'success');
+                closeRescheduleModal();
+                fetchAppointments();
             } else {
                 showNotification(data.message || 'Failed to reschedule appointment. Please try again.', 'error');
             }
@@ -285,52 +383,39 @@ export default function MyAppointments() {
         }
     };
 
-    const handleConfirmAction = async () => {
-        if (!action || !appointmentId) return;
+    // Cancel appointment function
+    const handleCancelAppointment = async (appointmentId: number) => {
+        if (!window.confirm('Are you sure you want to cancel this appointment? This action cannot be undone.')) {
+            return;
+        }
 
         setIsProcessing(true);
         try {
             const token = localStorage.getItem('token');
             
-            if (action === 'cancel') {
-                // Handle appointment cancellation
-                const response = await fetch(apiUrl.cancelAppointment(parseInt(appointmentId)), {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                const data = await response.json();
-                
-                if (data.status) {
-                    // Update local state
-                    setAppointments(prev => 
-                        prev.map(apt => 
-                            apt.id === parseInt(appointmentId) 
-                                ? { ...apt, status: 'cancelled' as const }
-                                : apt
-                        )
-                    );
-                    setError('');
-                } else {
-                    setError('Failed to cancel appointment. Please try again.');
+            const response = await fetch(apiUrl.cancelAppointment(appointmentId), {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
                 }
+            });
+
+            const data = await response.json();
+            
+            if (data.status) {
+                showNotification('Appointment cancelled successfully', 'success');
+                fetchAppointments();
+            } else {
+                showNotification(data.message || 'Failed to cancel appointment. Please try again.', 'error');
             }
         } catch (err) {
-            setError('Network error. Please try again.');
-            console.error('Error processing appointment action:', err);
+            showNotification('Network error. Please try again.', 'error');
+            console.error('Error cancelling appointment:', err);
         } finally {
             setIsProcessing(false);
-            closeModal();
         }
-    };
-
-    const getSelectedAppointment = () => {
-        if (!appointmentId) return null;
-        return appointments.find(apt => apt.id === parseInt(appointmentId));
     };
 
     if (loading) {
@@ -338,7 +423,7 @@ export default function MyAppointments() {
             <>
                 <Header />
                 <div className="min-h-screen bg-gray-50 pt-20">
-                    <div className="max-w-4xl mx-auto px-4 py-8">
+                    <div className="max-w-7xl mx-auto px-4 py-8">
                         <div className="flex items-center justify-center h-64">
                             <FaSpinner className="animate-spin text-4xl text-blue-500" />
                             <span className="ml-3 text-xl text-gray-600">Loading appointments...</span>
@@ -349,11 +434,15 @@ export default function MyAppointments() {
         );
     }
 
+    const { pending, confirmedAndCompleted } = organizeAppointments();
+    const pendingToShow = showAllPending ? pending : pending.slice(0, 3);
+    const petGroups = groupAppointmentsByPet(confirmedAndCompleted);
+
     return (
         <>
             <Header />
             <div className="min-h-screen bg-gray-50 pt-20">
-                <div className="max-w-4xl mx-auto px-4 py-8">
+                <div className="max-w-7xl mx-auto px-4 py-8">
                     {/* Page Header */}
                     <div className="mb-8">
                         <div className="flex items-center justify-between">
@@ -363,7 +452,7 @@ export default function MyAppointments() {
                                     My Appointments
                                 </h1>
                                 <p className="text-gray-600 mt-2">
-                                    View and track the status of your veterinary appointments
+                                    Track your pets' appointment history and medical records
                                 </p>
                             </div>
                             <div className="flex items-center gap-3">
@@ -398,7 +487,6 @@ export default function MyAppointments() {
                         </div>
                     )}
 
-                    {/* Appointments List */}
                     {appointments.length === 0 ? (
                         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
                             <FaCalendarAlt className="text-6xl text-gray-300 mx-auto mb-4" />
@@ -416,421 +504,346 @@ export default function MyAppointments() {
                             </button>
                         </div>
                     ) : (
-                        <div className="space-y-6">
-                            {appointments.map((appointment) => (
-                                <div
-                                    key={appointment.id}
-                                    className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
-                                >
-                                    <div className="p-6">
-                                        {/* Appointment Header */}
-                                        <div className="flex items-start justify-between mb-4">
-                                            <div className="flex items-center gap-3">
-                                                {getStatusIcon(appointment.status)}
-                                                <div>
-                                                    <h3 className="text-lg font-semibold text-gray-900">
-                                                        {formatDate(appointment.appointment_date)}
-                                                    </h3>
-                                                    <p className="text-gray-600 flex items-center gap-1">
-                                                        <FaClock className="text-sm" />
-                                                        {formatTime(appointment.appointment_time)}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                {isUpcoming(appointment.appointment_date, appointment.appointment_time) && (
-                                                    <span className="text-sm text-blue-600 font-medium">
-                                                        Upcoming
-                                                    </span>
-                                                )}
-                                                <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(appointment.status)}`}>
-                                                    {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        {/* Pets Section */}
-                                        <div className="mb-4">
-                                            <h4 className="text-sm font-semibold text-gray-700 mb-2">Pets:</h4>
-                                            <div className="flex flex-wrap gap-2">
-                                                {appointment.pets.map((pet, index) => (
-                                                    <div
-                                                        key={pet.id}
-                                                        className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-full text-sm"
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            {/* Left Sidebar - Pets and Pending Appointments */}
+                            <div className="lg:col-span-1">
+                                <div className="bg-white rounded-lg shadow-sm p-6">
+                                    {/* Pending Appointments Section */}
+                                    {pending.length > 0 && (
+                                        <div className="mb-8">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                                                    <FaClock className="text-yellow-500" />
+                                                    Pending Appointments
+                                                </h3>
+                                                {pending.length > 3 && (
+                                                    <button
+                                                        onClick={() => setShowAllPending(!showAllPending)}
+                                                        className="text-sm text-blue-600 hover:text-blue-800 transition-colors"
                                                     >
-                                                        {pet.type === 'dog' ? (
-                                                            <FaDog className="text-brown-500" />
-                                                        ) : (
-                                                            <FaCat className="text-gray-600" />
-                                                        )}
-                                                        <span className="font-medium">
-                                                            Pet #{index + 1}:
-                                                        </span>
-                                                        <span>
-                                                            {pet.breed} ({pet.type})
-                                                        </span>
+                                                        {showAllPending ? 'Collapse' : `+${pending.length - 3} more`}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            
+                                            <div className="space-y-3">
+                                                {pendingToShow.map((appointment) => (
+                                                    <div key={appointment.id} className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <span className="text-sm font-medium text-yellow-800">
+                                                                {formatDate(appointment.appointment_date)}
+                                                            </span>
+                                                            <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                                                                {formatTime(appointment.appointment_time)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-xs text-yellow-700">
+                                                            {appointment.pets.map(pet => pet.name).join(', ')}
+                                                        </div>
+                                                        <div className="mt-2 flex gap-2">
+                                                            <button
+                                                                onClick={() => handleRescheduleClick(appointment.id)}
+                                                                className="text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 px-2 py-1 rounded transition-colors"
+                                                            >
+                                                                Reschedule
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleCancelAppointment(appointment.id)}
+                                                                className="text-xs bg-red-100 text-red-700 hover:bg-red-200 px-2 py-1 rounded transition-colors"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
+                                    )}
 
-                                        {/* Services Section */}
-                                        <div className="flex flex-row justify-between">
-                                            <div className="mb-4">
-                                                <h4 className="text-sm font-semibold text-gray-700 mb-2">Services:</h4>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {appointment.services.map((service) => (
-                                                        <span
-                                                            key={service.id}
-                                                            className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
-                                                        >
-                                                        {service.name}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {appointment.status === 'pending' && (
-                                                <div className="mb-4 flex items-center">
-                                                    <button
-                                                        onClick={() => handleRescheduleClick(appointment.id)}
-                                                        className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg transition-colors-transform duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg text-sm"
-                                                    >
-                                                        Reschedule
-                                                    </button>
-                                                    <button
-                                                        onClick={() => navigate(`?action=cancel&id=${appointment.id}`)}
-                                                        className="ml-3 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors-transform duration-300 ease-out text-sm hover:-translate-y-0.5 hover:shadow-lg"
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                </div>
-                                            )}
-
-                                            {appointment.status === 'completed' && appointment.medical_records && appointment.medical_records.length > 0 && (
-                                                <div className="mb-4 flex items-center">
-                                                    <button
-                                                        onClick={() => setExpandedMedicalRecords(expandedMedicalRecords === appointment.id ? null : appointment.id)}
-                                                        className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors-transform duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg text-sm flex items-center gap-2"
-                                                    >
-                                                        <FaClipboardList />
-                                                        {expandedMedicalRecords === appointment.id ? 'Hide Medical Records' : 'View Medical Records'}
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                        
-
-                                        {/* Notes Section */}
-                                        {appointment.notes && (
-                                            <div className="border-t border-gray-200 pt-4">
-                                                <h4 className="text-sm font-semibold text-gray-700 mb-2">Notes:</h4>
-                                                <p className="text-gray-600 text-sm bg-gray-50 p-3 rounded">
-                                                    {appointment.notes}
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {/* Medical Records Section (for completed appointments) */}
-                                        {appointment.status === 'completed' && appointment.medical_records && appointment.medical_records.length > 0 && (
-                                            <div className="border-t border-gray-200 pt-4">
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <h4 className="text-sm font-semibold text-gray-700">Medical Records</h4>
-                                                    <button
-                                                        onClick={() => setExpandedMedicalRecords(expandedMedicalRecords === appointment.id ? null : appointment.id)}
-                                                        className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm transition-colors"
-                                                    >
-                                                        <FaEye />
-                                                        {expandedMedicalRecords === appointment.id ? 'Hide Records' : 'View Records'}
-                                                    </button>
-                                                </div>
-
-                                                {expandedMedicalRecords === appointment.id && (
-                                                    <div className="space-y-4">
-                                                        {appointment.medical_records.map((record, index) => (
-                                                            <div key={index} className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                                    <div>
-                                                                        <p className="text-sm font-medium text-gray-600">Pet Name</p>
-                                                                        <p className="text-gray-900">{record.pet_name}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="text-sm font-medium text-gray-600">Doctor</p>
-                                                                        <p className="text-gray-900">{record.doctor_name ? `Dr. ${record.doctor_name}` : 'N/A'}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="text-sm font-medium text-gray-600">Weight</p>
-                                                                        <p className="text-gray-900">{record.weight ? `${record.weight} kg` : 'N/A'}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="text-sm font-medium text-gray-600">Test Type</p>
-                                                                        <p className="text-gray-900">{record.test_type || 'N/A'}</p>
-                                                                    </div>
-                                                                </div>
-                                                                
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                                                    <div>
-                                                                        <p className="text-sm font-medium text-gray-600">Symptoms</p>
-                                                                        <p className="text-gray-900">{record.symptoms || 'N/A'}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="text-sm font-medium text-gray-600">Diagnosis</p>
-                                                                        <p className="text-gray-900">{record.diagnosis || 'N/A'}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="text-sm font-medium text-gray-600">Medication</p>
-                                                                        <p className="text-gray-900">{record.medication || 'N/A'}</p>
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="text-sm font-medium text-gray-600">Treatment</p>
-                                                                        <p className="text-gray-900">{record.treatment || 'N/A'}</p>
-                                                                    </div>
-                                                                </div>
-
-                                                                {record.selected_tests && record.selected_tests.length > 0 && (
-                                                                    <div className="mb-4">
-                                                                        <p className="text-sm font-medium text-gray-600 mb-2">Tests Performed</p>
-                                                                        <div className="space-y-2">
-                                                                            {record.selected_tests.map((test, testIndex) => (
-                                                                                <div key={testIndex} className="bg-white rounded p-2 flex justify-between items-center">
-                                                                                    <span className="text-sm text-gray-900">{test.name}</span>
-                                                                                    <span className="text-sm font-medium text-purple-600">₱{test.price}</span>
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                        <div className="mt-2 pt-2 border-t border-gray-200">
-                                                                            <div className="flex justify-between text-sm font-medium">
-                                                                                <span>Test Cost for {record.pet_name}:</span>
-                                                                                <span className="text-purple-600">₱{record.test_cost || 0}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                )}
-
-                                                                {record.notes && (
-                                                                    <div>
-                                                                        <p className="text-sm font-medium text-gray-600">Notes</p>
-                                                                        <p className="text-gray-900 text-sm">{record.notes}</p>
-                                                                    </div>
-                                                                )}
-
-                                                                <div className="mt-3 pt-3 border-t border-purple-200">
-                                                                    <p className="text-xs text-gray-500">
-                                                                        Examination Date: {new Date(record.created_at).toLocaleDateString('en-US', {
-                                                                            year: 'numeric',
-                                                                            month: 'long',
-                                                                            day: 'numeric'
-                                                                        })}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
-                                                        ))}
+                                    {/* Your Pets Section */}
+                                    <h3 className="font-semibold text-gray-900 mb-4">Your Pets</h3>
+                                    <div className="space-y-3">
+                                        {petGroups.map((petGroup, index) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => setSelectedPetData(petGroup)}
+                                                className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                                                    selectedPetData?.pet_name === petGroup.pet_name && 
+                                                    selectedPetData?.pet_breed === petGroup.pet_breed
+                                                        ? 'border-blue-300 bg-blue-50 shadow-sm' 
+                                                        : 'border-gray-200 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                <div className="flex items-center space-x-3">
+                                                    <span className="text-2xl">{getPetTypeIcon(petGroup.pet_type)}</span>
+                                                    <div>
+                                                        <h4 className="font-medium text-gray-900">{petGroup.pet_name}</h4>
+                                                        <p className="text-sm text-gray-600">{petGroup.pet_breed} • {petGroup.pet_type}</p>
+                                                        <p className="text-xs text-gray-500 mt-1">
+                                                            {petGroup.appointments.length} appointment{petGroup.appointments.length !== 1 ? 's' : ''}
+                                                        </p>
                                                     </div>
-                                                )}
-                                            </div>
-                                        )}
+                                                </div>
+                                            </button>
+                                        ))}
                                     </div>
 
-                                    {/* Appointment Footer */}
-                                    <div className="bg-gray-50 px-6 py-3 text-xs text-gray-500">
-                                        Booked on: {new Date(appointment.created_at).toLocaleDateString('en-US', {
-                                            year: 'numeric',
-                                            month: 'short',
-                                            day: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit'
-                                        })}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {/* Help Section */}
-                    <div className="mt-12 bg-blue-50 border border-blue-200 rounded-lg p-6">
-                        <h3 className="text-lg font-semibold text-blue-900 mb-2">
-                            Need help with your appointment?
-                        </h3>
-                        <p className="text-blue-700 mb-4">
-                            If you need to cancel or reschedule your appointment, please contact us directly.
-                        </p>
-                        <div className="flex flex-wrap gap-4 text-sm">
-                            <span className="text-blue-600">📞 Phone: (+63) 968 388 2727</span>
-                            <span className="text-blue-600">✉️ Email: petmedicsvetclinic21@gmail.com</span>
-                            <span className="text-blue-600">🕒 Hours: Mon-Sat 8AM-6PM</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Custom Confirmation Modal for Cancel */}
-            {action === 'cancel' && appointmentId && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-                        <div className="p-6">
-                            <div className="flex items-center mb-4">
-                                <FaTimesCircle className="text-red-500 text-2xl mr-3" />
-                                <h3 className="text-lg font-semibold text-gray-900">
-                                    Cancel Appointment
-                                </h3>
-                            </div>
-                            
-                            {getSelectedAppointment() && (
-                                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                                    <p className="text-sm text-gray-600 mb-2">
-                                        <strong>Date:</strong> {formatDate(getSelectedAppointment()!.appointment_date)}
-                                    </p>
-                                    <p className="text-sm text-gray-600 mb-2">
-                                        <strong>Time:</strong> {formatTime(getSelectedAppointment()!.appointment_time)}
-                                    </p>
-                                    <p className="text-sm text-gray-600">
-                                        <strong>Pets:</strong> {getSelectedAppointment()!.pets.length} pet(s)
-                                    </p>
-                                </div>
-                            )}
-
-                            <p className="text-gray-600 mb-6">
-                                Are you sure you want to cancel this appointment? This action cannot be undone.
-                            </p>
-
-                            <div className="flex gap-3 justify-end">
-                                <button
-                                    onClick={closeModal}
-                                    disabled={isProcessing}
-                                    className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors disabled:opacity-50"
-                                >
-                                    No, Keep It
-                                </button>
-                                <button
-                                    onClick={handleConfirmAction}
-                                    disabled={isProcessing}
-                                    className="px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white"
-                                >
-                                    {isProcessing && <FaSpinner className="animate-spin" />}
-                                    Yes, Cancel
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Reschedule Modal */}
-            {showRescheduleModal && rescheduleAppointmentId && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-                        <div className="p-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center">
-                                    <FaClock className="text-yellow-500 text-2xl mr-3" />
-                                    <h3 className="text-lg font-semibold text-gray-900">
-                                        Reschedule Appointment
-                                    </h3>
-                                </div>
-                                <button
-                                    onClick={closeRescheduleModal}
-                                    disabled={isProcessing}
-                                    className="text-gray-400 hover:text-gray-600 text-2xl disabled:opacity-50"
-                                >
-                                    ×
-                                </button>
-                            </div>
-                            
-                            {appointments.find(apt => apt.id === rescheduleAppointmentId) && (
-                                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                                    <h4 className="text-sm font-semibold text-gray-700 mb-2">Current Appointment:</h4>
-                                    <p className="text-sm text-gray-600 mb-1">
-                                        <strong>Date:</strong> {formatDate(appointments.find(apt => apt.id === rescheduleAppointmentId)!.appointment_date)}
-                                    </p>
-                                    <p className="text-sm text-gray-600 mb-1">
-                                        <strong>Time:</strong> {formatTime(appointments.find(apt => apt.id === rescheduleAppointmentId)!.appointment_time)}
-                                    </p>
-                                    <p className="text-sm text-gray-600">
-                                        <strong>Pets:</strong> {appointments.find(apt => apt.id === rescheduleAppointmentId)!.pets.length} pet(s)
-                                    </p>
-                                </div>
-                            )}
-
-                            {/* Date Selection */}
-                            <div className="mb-6">
-                                <h4 className="text-md font-semibold text-gray-800 mb-3">Select New Date</h4>
-                                <p className="text-sm text-gray-600 mb-3">
-                                    Appointments must be scheduled at least 1 day in advance. Same-day appointments are not available.
-                                </p>
-                                <div className="bg-gray-50 p-4 rounded-lg">
-                                    <DayPicker
-                                        mode="single"
-                                        selected={newSelectedDate}
-                                        onSelect={setNewSelectedDate}
-                                        disabled={disabledDays}
-                                        className="rdp-custom"
-                                        modifiersStyles={{
-                                            selected: { backgroundColor: '#0d9488', color: 'white' }
-                                        }}
-                                    />
-                                    {newSelectedDate && (
-                                        <p className="mt-3 text-sm text-gray-600">
-                                            <strong>Selected Date:</strong> {newSelectedDate.toLocaleDateString('en-US', {
-                                                weekday: 'long',
-                                                year: 'numeric',
-                                                month: 'long',
-                                                day: 'numeric'
-                                            })}
-                                        </p>
+                                    {petGroups.length === 0 && pending.length === 0 && (
+                                        <div className="text-center py-8 text-gray-500">
+                                            <FaHistory className="text-3xl mx-auto mb-3" />
+                                            <p>No appointment history found</p>
+                                        </div>
                                     )}
                                 </div>
                             </div>
 
-                            {/* Time Selection */}
-                            <div className="mb-6">
-                                <h4 className="text-md font-semibold text-gray-800 mb-3">Select New Time</h4>
-                                <p className="text-sm text-gray-600 mb-3">Clinic hours: 8:00 AM - 5:00 PM (Appointments available until 3:00 PM)</p>
-                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                                    {timeSlots.map((time) => (
-                                        <button
-                                            key={time}
-                                            type="button"
-                                            onClick={() => setNewSelectedTime(time)}
-                                            disabled={isProcessing}
-                                            className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors disabled:opacity-50 ${
-                                                newSelectedTime === time
-                                                    ? 'bg-teal-600 text-white border-teal-600'
-                                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                                            }`}
-                                        >
-                                            {time}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
+                            {/* Right Content - Selected Pet Appointments */}
+                            <div className="lg:col-span-2">
+                                {selectedPetData ? (
+                                    <div className="bg-white rounded-lg shadow-sm p-6">
+                                        <div className="flex items-center space-x-3 mb-6">
+                                            <span className="text-3xl">{getPetTypeIcon(selectedPetData.pet_type)}</span>
+                                            <div>
+                                                <h2 className="text-xl font-semibold text-gray-900">{selectedPetData.pet_name}</h2>
+                                                <p className="text-gray-600">{selectedPetData.pet_breed} • {selectedPetData.pet_type}</p>
+                                            </div>
+                                        </div>
 
-                            {error && (
-                                <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-3 py-2 rounded text-sm">
-                                    {error}
-                                </div>
-                            )}
+                                        <div className="space-y-4">
+                                            {selectedPetData.appointments.map((appointment) => (
+                                                <div key={appointment.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                        <div className="space-y-3">
+                                                            <div className="flex items-center space-x-2">
+                                                                <FaCalendarAlt className="text-blue-600" />
+                                                                <div>
+                                                                    <p className="text-sm text-gray-600">Date & Time</p>
+                                                                    <p className="font-medium text-gray-900">
+                                                                        {formatDate(appointment.appointment_date)} at {formatTime(appointment.appointment_time)}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            <div className="flex items-center space-x-2">
+                                                                {getStatusIcon(appointment.status)}
+                                                                <div>
+                                                                    <p className="text-sm text-gray-600">Status</p>
+                                                                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(appointment.status)}`}>
+                                                                        {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
 
-                            <div className="flex gap-3 justify-end">
-                                <button
-                                    onClick={closeRescheduleModal}
-                                    disabled={isProcessing}
-                                    className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors disabled:opacity-50"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleRescheduleSubmit}
-                                    disabled={isProcessing || !newSelectedDate || !newSelectedTime}
-                                    className="px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white"
-                                >
-                                    {isProcessing && <FaSpinner className="animate-spin" />}
-                                    {isProcessing ? 'Rescheduling...' : 'Confirm Reschedule'}
-                                </button>
+                                                        <div className="space-y-3">
+                                                            <div className="flex items-start space-x-2">
+                                                                <FaClipboardList className="text-purple-600 mt-1" />
+                                                                <div>
+                                                                    <p className="text-sm text-gray-600">Services</p>
+                                                                    <div className="font-medium text-gray-900">
+                                                                        {appointment.services.map((service, idx) => (
+                                                                            <span key={service.id}>
+                                                                                {service.name}
+                                                                                {idx < appointment.services.length - 1 && ', '}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {appointment.status === 'completed' && appointment.medical_records && appointment.medical_records.length > 0 && (
+                                                                <button
+                                                                    onClick={() => setExpandedMedicalRecords(
+                                                                        expandedMedicalRecords === appointment.id ? null : appointment.id
+                                                                    )}
+                                                                    className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                                                                >
+                                                                    <FaEye />
+                                                                    <span>View Medical Records</span>
+                                                                </button>
+                                                            )}
+
+                                                            {appointment.status === 'pending' && (
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        onClick={() => handleRescheduleClick(appointment.id)}
+                                                                        className="flex items-center space-x-2 text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 px-3 py-1 rounded transition-colors"
+                                                                    >
+                                                                        <FaEdit />
+                                                                        <span>Reschedule</span>
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleCancelAppointment(appointment.id)}
+                                                                        className="flex items-center space-x-2 text-sm bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1 rounded transition-colors"
+                                                                    >
+                                                                        <FaTimesCircle />
+                                                                        <span>Cancel</span>
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Expandable Medical Records */}
+                                                    {expandedMedicalRecords === appointment.id && appointment.medical_records && (
+                                                        <div className="mt-4 pt-4 border-t border-gray-200">
+                                                            <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+                                                                <FaUserMd className="text-green-600" />
+                                                                Medical Records
+                                                            </h4>
+                                                            <div className="space-y-3">
+                                                                {appointment.medical_records.map((record) => (
+                                                                    <div key={record.id} className="bg-gray-50 rounded-lg p-3">
+                                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                                                            {record.doctor_name && (
+                                                                                <div>
+                                                                                    <span className="font-medium text-gray-700">Doctor:</span>
+                                                                                    <p className="text-gray-900">{record.doctor_name}</p>
+                                                                                </div>
+                                                                            )}
+                                                                            {record.weight && (
+                                                                                <div>
+                                                                                    <span className="font-medium text-gray-700">Weight:</span>
+                                                                                    <p className="text-gray-900">{record.weight}</p>
+                                                                                </div>
+                                                                            )}
+                                                                            {record.symptoms && (
+                                                                                <div className="md:col-span-2">
+                                                                                    <span className="font-medium text-gray-700">Symptoms:</span>
+                                                                                    <p className="text-gray-900">{record.symptoms}</p>
+                                                                                </div>
+                                                                            )}
+                                                                            {record.diagnosis && (
+                                                                                <div className="md:col-span-2">
+                                                                                    <span className="font-medium text-gray-700">Diagnosis:</span>
+                                                                                    <p className="text-gray-900">{record.diagnosis}</p>
+                                                                                </div>
+                                                                            )}
+                                                                            {record.treatment && (
+                                                                                <div className="md:col-span-2">
+                                                                                    <span className="font-medium text-gray-700">Treatment:</span>
+                                                                                    <p className="text-gray-900">{record.treatment}</p>
+                                                                                </div>
+                                                                            )}
+                                                                            {record.medication && (
+                                                                                <div className="md:col-span-2">
+                                                                                    <span className="font-medium text-gray-700">Medication:</span>
+                                                                                    <p className="text-gray-900">{record.medication}</p>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="mt-3 pt-3 border-t border-gray-100">
+                                                        <p className="text-xs text-gray-500">
+                                                            Appointment #{appointment.id} • Created {new Date(appointment.created_at).toLocaleDateString()}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {selectedPetData.appointments.length === 0 && (
+                                            <div className="text-center py-8">
+                                                <FaCalendarAlt className="text-gray-400 text-3xl mx-auto mb-3" />
+                                                <p className="text-gray-600">No appointments found for {selectedPetData.pet_name}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+                                        <FaHistory className="text-6xl text-gray-300 mx-auto mb-4" />
+                                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                                            Select a Pet
+                                        </h3>
+                                        <p className="text-gray-600">
+                                            Choose a pet from the sidebar to view their appointment history and medical records.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                    </div>
+                    )}
+
+                    {/* Reschedule Modal */}
+                    {showRescheduleModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                                <div className="p-6 border-b border-gray-200">
+                                    <h2 className="text-xl font-semibold text-gray-900">Reschedule Appointment</h2>
+                                </div>
+                                
+                                <div className="p-6 space-y-6">
+                                    {/* Date Selection */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Select New Date
+                                        </label>
+                                        <div className="border border-gray-300 rounded-lg p-4 bg-gray-50">
+                                            <DayPicker
+                                                mode="single"
+                                                selected={newSelectedDate}
+                                                onSelect={setNewSelectedDate}
+                                                disabled={disabledDays}
+                                                className="mx-auto"
+                                                modifiersClassNames={{
+                                                    selected: 'bg-blue-600 text-white hover:bg-blue-700',
+                                                    today: 'bg-blue-100 text-blue-900 font-semibold'
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Time Selection */}
+                                    {newSelectedDate && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Select New Time
+                                            </label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {timeSlots.map((time) => (
+                                                    <button
+                                                        key={time}
+                                                        onClick={() => setNewSelectedTime(time)}
+                                                        className={`p-2 text-sm border rounded-lg transition-colors ${
+                                                            newSelectedTime === time
+                                                                ? 'bg-blue-600 text-white border-blue-600'
+                                                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300'
+                                                        }`}
+                                                    >
+                                                        {time}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+                                    <button
+                                        onClick={closeRescheduleModal}
+                                        className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleRescheduleSubmit}
+                                        disabled={!newSelectedDate || !newSelectedTime || isProcessing}
+                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                    >
+                                        {isProcessing ? <FaSpinner className="animate-spin" /> : null}
+                                        {isProcessing ? 'Rescheduling...' : 'Reschedule Appointment'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
-            )}
+            </div>
         </>
     );
-}
+};
