@@ -6,7 +6,7 @@
 ![SQLite](https://img.shields.io/badge/Database-SQLite-07405E?logo=sqlite&logoColor=white)
 ![MySQL](https://img.shields.io/badge/Database-MySQL-4479A1?logo=mysql&logoColor=white)
 ![VPS](https://img.shields.io/badge/Hosted%20on-Hostinger-673DE6?logo=server&logoColor=white)
-![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+![License: BSD 2-Clause](https://img.shields.io/badge/License-BSD%202--Clause-blue.svg)
 
 A full-stack web application designed to streamline veterinary operations and enhance client engagement.  
 This project includes an **Admin Dashboard** for managing patients, vaccinations, treatments, and diagnoses — along with a **marketing website** for showcasing the clinic’s services to potential clients.
