@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Pet;
 use App\Models\InventoryUsage;
+use App\Models\Appointment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class VaccinationRecordController extends Controller
 {
@@ -113,6 +115,38 @@ class VaccinationRecordController extends Controller
                 ], 403);
             }
 
+            // First get the specific pet to know which pet we're looking for
+            $targetPet = DB::table('pets')
+                ->where('id', $petId)
+                ->first();
+            
+            if (!$targetPet) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Pet not found'
+                ], 404);
+            }
+
+            Log::info('Admin vaccination debug', [
+                'target_pet_id' => $petId,
+                'target_pet_name' => $targetPet->name,
+                'target_pet_breed' => $targetPet->breed,
+                'user_id' => $userId
+            ]);
+
+            // Find ALL pets with the same name and breed (to match client-side logic)
+            $allMatchingPetIds = DB::table('pets')
+                ->join('appointments', 'pets.appointment_id', '=', 'appointments.id')
+                ->where('appointments.user_id', $userId)
+                ->where('pets.name', $targetPet->name)
+                ->where('pets.breed', $targetPet->breed)
+                ->pluck('pets.id')
+                ->toArray();
+
+            Log::info('Admin vaccination matching pets', [
+                'all_matching_pet_ids' => $allMatchingPetIds
+            ]);
+
             // Get all vaccination records for the user
             $vaccinationRecords = InventoryUsage::with([
                 'product.category',
@@ -131,32 +165,34 @@ class VaccinationRecordController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-            // Get vaccination records only for the specific pet
+            // Get vaccination records for all matching pets (same name+breed)
             $petVaccinations = [];
             foreach ($vaccinationRecords as $record) {
-                // Check if this appointment included the specific pet
-                $targetPet = $record->appointment->pets->where('id', $petId)->first();
-                if ($targetPet) {
-                    // Get doctor name from medical record for this appointment and pet
-                    $doctorName = 'Name Not Set';
-                    $medicalRecord = $record->appointment->medicalRecords->where('pet_id', $petId)->first();
-                    if ($medicalRecord && $medicalRecord->doctor_name) {
-                        $doctorName = $medicalRecord->doctor_name;
+                // Check if this appointment included any of the matching pets
+                foreach ($record->appointment->pets as $pet) {
+                    if (in_array($pet->id, $allMatchingPetIds)) {
+                        // Get doctor name from medical record for this appointment and pet
+                        $doctorName = 'Name Not Set';
+                        $medicalRecord = $record->appointment->medicalRecords->where('pet_id', $pet->id)->first();
+                        if ($medicalRecord && $medicalRecord->doctor_name) {
+                            $doctorName = $medicalRecord->doctor_name;
+                        }
+                        
+                        $petVaccinations[] = [
+                            'id' => $record->id,
+                            'pet_id' => $pet->id,
+                            'pet_name' => $pet->name,
+                            'pet_type' => $pet->type,
+                            'pet_breed' => $pet->breed,
+                            'given_date' => $record->created_at->format('Y-m-d'),
+                            'vaccine_name' => $record->product->name,
+                            'quantity' => $record->quantity_used,
+                            'appointment_id' => $record->appointment_id,
+                            'veterinarian' => $doctorName,
+                            'diagnosis' => $record->appointment->notes
+                        ];
+                        break; // Only add once per inventory usage record
                     }
-                    
-                    $petVaccinations[] = [
-                        'id' => $record->id,
-                        'pet_id' => $targetPet->id,
-                        'pet_name' => $targetPet->name,
-                        'pet_type' => $targetPet->type,
-                        'pet_breed' => $targetPet->breed,
-                        'given_date' => $record->created_at->format('Y-m-d'),
-                        'vaccine_name' => $record->product->name,
-                        'quantity' => $record->quantity_used,
-                        'appointment_id' => $record->appointment_id,
-                        'veterinarian' => $doctorName,
-                        'diagnosis' => $record->appointment->notes
-                    ];
                 }
             }
 
