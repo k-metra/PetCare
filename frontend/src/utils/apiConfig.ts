@@ -29,6 +29,7 @@ export const apiUrl = {
   // Appointments
   appointments: () => getApiUrl('api/appointments'),
   appointment: (id: number) => getApiUrl(`api/appointments/${id}`),
+  rescheduleAppointment: (id: number) => getApiUrl(`api/appointments/${id}`), // Customer reschedule
   cancelAppointment: (id: number) => getApiUrl(`api/appointments/${id}/cancel`),
   availableTimeSlots: () => getApiUrl('api/appointments/available-slots'),
   services: () => getApiUrl('api/services'),
@@ -36,7 +37,7 @@ export const apiUrl = {
   availableVaccines: () => getApiUrl('api/appointments/vaccines'),
   adminAppointments: () => getApiUrl('api/admin/appointments'),
   appointmentStatus: (id: number) => getApiUrl(`api/admin/appointments/${id}/status`),
-  rescheduleAppointment: (id: number) => getApiUrl(`api/admin/appointments/${id}/reschedule`),
+  adminRescheduleAppointment: (id: number) => getApiUrl(`api/admin/appointments/${id}/reschedule`), // Admin reschedule
   editAppointment: (id: number) => getApiUrl(`api/admin/appointments/${id}/edit`),
   deleteAppointment: (id: number) => getApiUrl(`api/admin/appointments/${id}`),
   completeAppointment: () => getApiUrl('api/admin/appointments/complete'),
