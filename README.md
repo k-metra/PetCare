@@ -105,7 +105,7 @@ It demonstrates:
 | <img width="1902" height="834" alt="image" src="https://github.com/user-attachments/assets/6a1ffdba-bc7e-4680-b5e6-f0d5f5c9f671" /> | <img width="1901" height="840" alt="image" src="https://github.com/user-attachments/assets/12066ba1-1780-42e5-bc17-1aa60408b07c" />|
 
 ## License
-This project is open-source and available under the **MIT License**.
+This project is open-source and available under the **BSD 2-Clause License**.
 
 ---
 *Developed with ❤️ by a passionate web developer exploring full-stack excellence.*
